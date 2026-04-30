@@ -19,7 +19,7 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
         id = node["id"].asString(),
         name = node["name"].asString(),
         email = node["email"].asString(),
-        status = Status.valueOf(node["status"].asString()),
+        status = Status.entries.firstOrNull { it.name == node["status"].asString() } ?: Status.OFFLINE,
         interest = node["interest"].asString(),
         abteilung = node["abteilung"].asString(),
         raum = node["raum"].asString(),
@@ -27,6 +27,9 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
         friends = node["friends"].asList { it.asString() }
     )
 
+    // Note: create() writes the friends array to the node property (source of truth for nodeToUser),
+    // but does not create FRIENDS_WITH relationships for any pre-populated friends list.
+    // Relationships must be managed explicitly via addFriend/removeFriend after all nodes exist.
     override fun create(user: User) {
         driver.session().use { session ->
             session.run(
@@ -48,7 +51,8 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
     override fun getById(id: String): User? {
         driver.session().use { session ->
             val result = session.run("MATCH (u:User {id: \$id}) RETURN u", parameters("id", id))
-            return if (result.hasNext()) nodeToUser(result.single()["u"].asNode()) else null
+            val records = result.list()
+            return if (records.isEmpty()) null else nodeToUser(records[0]["u"].asNode())
         }
     }
 
@@ -89,7 +93,11 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
     override fun addFriend(userId: String, friendId: String) {
         driver.session().use { session ->
             session.run(
-                "MATCH (a:User {id: \$userId}), (b:User {id: \$friendId}) MERGE (a)-[:FRIENDS_WITH]->(b)",
+                """MATCH (a:User {id: ${'$'}userId}), (b:User {id: ${'$'}friendId})
+               MERGE (a)-[:FRIENDS_WITH]->(b)
+               MERGE (b)-[:FRIENDS_WITH]->(a)
+               SET a.friends = CASE WHEN ${'$'}friendId IN a.friends THEN a.friends ELSE a.friends + ${'$'}friendId END
+               SET b.friends = CASE WHEN ${'$'}userId IN b.friends THEN b.friends ELSE b.friends + ${'$'}userId END""",
                 parameters("userId", userId, "friendId", friendId)
             )
         }
@@ -98,7 +106,11 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
     override fun removeFriend(userId: String, friendId: String) {
         driver.session().use { session ->
             session.run(
-                "MATCH (a:User {id: \$userId})-[r:FRIENDS_WITH]->(b:User {id: \$friendId}) DELETE r",
+                """MATCH (a:User {id: ${'$'}userId})-[r1:FRIENDS_WITH]->(b:User {id: ${'$'}friendId})
+               OPTIONAL MATCH (b)-[r2:FRIENDS_WITH]->(a)
+               DELETE r1, r2
+               SET a.friends = [x IN a.friends WHERE x <> ${'$'}friendId]
+               SET b.friends = [x IN b.friends WHERE x <> ${'$'}userId]""",
                 parameters("userId", userId, "friendId", friendId)
             )
         }
