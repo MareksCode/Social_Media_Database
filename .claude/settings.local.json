@@ -5,7 +5,10 @@
       "Bash(git commit *)",
       "Bash(git -C /c/Users/marc/Documents/DB log --oneline -5)",
       "Bash(git -C \"C:/Users/marc/Documents/DB\" status)",
-      "Bash(git -C \"C:/Users/marc/Documents/DB\" log --oneline -5)"
+      "Bash(git -C \"C:/Users/marc/Documents/DB\" log --oneline -5)",
+      "Bash(mvn test *)",
+      "PowerShell(Start-Process \"C:\\\\Program Files\\\\Docker\\\\Docker\\\\Docker Desktop.exe\" -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Service -Name \"com.docker.service\")"
     ]
   }
 }
