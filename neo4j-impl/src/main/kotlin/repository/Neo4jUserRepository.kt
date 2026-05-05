@@ -15,7 +15,7 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
             Neo4jUserRepository(GraphDatabase.driver(uri, AuthTokens.basic(user, password)))
     }
 
-    private fun nodeToUser(node: Node): User = User(
+    private fun nodeToUser(node: Node, friendIds: List<String> = emptyList()): User = User(
         id = node["id"].asString(),
         name = node["name"].asString(),
         email = node["email"].asString(),
@@ -24,25 +24,22 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
         abteilung = node["abteilung"].asString(),
         raum = node["raum"].asString(),
         profilbild = if (node["profilbild"].isNull) null else node["profilbild"].asString(),
-        friends = node["friends"].asList { it.asString() }
+        friends = friendIds
     )
 
-    // Note: create() writes the friends array to the node property (source of truth for nodeToUser),
-    // but does not create FRIENDS_WITH relationships for any pre-populated friends list.
-    // Relationships must be managed explicitly via addFriend/removeFriend after all nodes exist.
     override fun create(user: User) {
         driver.session().use { session ->
             session.run(
                 """CREATE (u:User {
                     id: ${'$'}id, name: ${'$'}name, email: ${'$'}email, status: ${'$'}status,
                     interest: ${'$'}interest, abteilung: ${'$'}abteilung, raum: ${'$'}raum,
-                    profilbild: ${'$'}profilbild, friends: ${'$'}friends
+                    profilbild: ${'$'}profilbild
                 })""",
                 parameters(
                     "id", user.id, "name", user.name, "email", user.email,
                     "status", user.status.name, "interest", user.interest,
                     "abteilung", user.abteilung, "raum", user.raum,
-                    "profilbild", user.profilbild, "friends", user.friends
+                    "profilbild", user.profilbild
                 )
             )
         }
@@ -50,9 +47,16 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
 
     override fun getById(id: String): User? {
         driver.session().use { session ->
-            val result = session.run("MATCH (u:User {id: \$id}) RETURN u", parameters("id", id))
+            val result = session.run(
+                """MATCH (u:User {id: ${'$'}id})
+                   OPTIONAL MATCH (u)-[:FRIENDS_WITH]->(f:User)
+                   RETURN u, collect(f.id) AS friendIds""",
+                parameters("id", id)
+            )
             val records = result.list()
-            return if (records.isEmpty()) null else nodeToUser(records[0]["u"].asNode())
+            if (records.isEmpty()) return null
+            val record = records[0]
+            return nodeToUser(record["u"].asNode(), record["friendIds"].asList { it.asString() })
         }
     }
 
@@ -62,13 +66,13 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
                 """MATCH (u:User {id: ${'$'}id}) SET u += {
                     name: ${'$'}name, email: ${'$'}email, status: ${'$'}status,
                     interest: ${'$'}interest, abteilung: ${'$'}abteilung, raum: ${'$'}raum,
-                    profilbild: ${'$'}profilbild, friends: ${'$'}friends
+                    profilbild: ${'$'}profilbild
                 }""",
                 parameters(
                     "id", user.id, "name", user.name, "email", user.email,
                     "status", user.status.name, "interest", user.interest,
                     "abteilung", user.abteilung, "raum", user.raum,
-                    "profilbild", user.profilbild, "friends", user.friends
+                    "profilbild", user.profilbild
                 )
             )
         }
@@ -83,10 +87,14 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
     override fun getFriends(userId: String): List<User> {
         driver.session().use { session ->
             val result = session.run(
-                "MATCH (u:User {id: \$id})-[:FRIENDS_WITH]->(f:User) RETURN f",
+                """MATCH (u:User {id: ${'$'}id})-[:FRIENDS_WITH]->(f:User)
+                   OPTIONAL MATCH (f)-[:FRIENDS_WITH]->(ff:User)
+                   RETURN f, collect(ff.id) AS friendIds""",
                 parameters("id", userId)
             )
-            return result.list { nodeToUser(it["f"].asNode()) }
+            return result.list { record ->
+                nodeToUser(record["f"].asNode(), record["friendIds"].asList { it.asString() })
+            }
         }
     }
 
@@ -95,9 +103,7 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
             session.run(
                 """MATCH (a:User {id: ${'$'}userId}), (b:User {id: ${'$'}friendId})
                MERGE (a)-[:FRIENDS_WITH]->(b)
-               MERGE (b)-[:FRIENDS_WITH]->(a)
-               SET a.friends = CASE WHEN ${'$'}friendId IN a.friends THEN a.friends ELSE a.friends + ${'$'}friendId END
-               SET b.friends = CASE WHEN ${'$'}userId IN b.friends THEN b.friends ELSE b.friends + ${'$'}userId END""",
+               MERGE (b)-[:FRIENDS_WITH]->(a)""",
                 parameters("userId", userId, "friendId", friendId)
             )
         }
@@ -108,9 +114,7 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
             session.run(
                 """MATCH (a:User {id: ${'$'}userId})-[r1:FRIENDS_WITH]->(b:User {id: ${'$'}friendId})
                OPTIONAL MATCH (b)-[r2:FRIENDS_WITH]->(a)
-               DELETE r1, r2
-               SET a.friends = [x IN a.friends WHERE x <> ${'$'}friendId]
-               SET b.friends = [x IN b.friends WHERE x <> ${'$'}userId]""",
+               DELETE r1, r2""",
                 parameters("userId", userId, "friendId", friendId)
             )
         }
@@ -122,11 +126,15 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
                 """MATCH (u:User {id: ${'$'}id})-[:FRIENDS_WITH]->(f)-[:FRIENDS_WITH]->(fof)
                    WHERE NOT (u)-[:FRIENDS_WITH]->(fof) AND fof <> u
                    WITH fof, count(f) AS commonCount
+                   OPTIONAL MATCH (fof)-[:FRIENDS_WITH]->(fofFriend:User)
+                   WITH fof, commonCount, collect(fofFriend.id) AS friendIds
                    ORDER BY commonCount DESC
-                   RETURN fof""",
+                   RETURN fof, friendIds""",
                 parameters("id", userId)
             )
-            return result.list { nodeToUser(it["fof"].asNode()) }
+            return result.list { record ->
+                nodeToUser(record["fof"].asNode(), record["friendIds"].asList { it.asString() })
+            }
         }
     }
 
