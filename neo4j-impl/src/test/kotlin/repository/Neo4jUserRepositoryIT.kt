@@ -85,7 +85,7 @@ class Neo4jUserRepositoryIT {
     }
 
     @Test
-    fun `addFriend updates friends property on both nodes`() {
+    fun `addFriend reflects in friends list via relationship`() {
         repository.create(user("1", "Alice"))
         repository.create(user("2", "Bob"))
         repository.addFriend("1", "2")
@@ -94,7 +94,7 @@ class Neo4jUserRepositoryIT {
     }
 
     @Test
-    fun `removeFriend removes relationship and property on both nodes`() {
+    fun `removeFriend removes relationship on both sides`() {
         repository.create(user("1", "Alice"))
         repository.create(user("2", "Bob"))
         repository.addFriend("1", "2")

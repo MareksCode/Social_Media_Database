@@ -1,8 +1,8 @@
 -------------------------------------------------------------------------------
 Test set: repository.Neo4jUserRepositoryIT
 -------------------------------------------------------------------------------
-Tests run: 1, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 0.553 s <<< FAILURE! -- in repository.Neo4jUserRepositoryIT
-repository.Neo4jUserRepositoryIT -- Time elapsed: 0.553 s <<< ERROR!
+Tests run: 1, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 0.576 s <<< FAILURE! -- in repository.Neo4jUserRepositoryIT
+repository.Neo4jUserRepositoryIT -- Time elapsed: 0.576 s <<< ERROR!
 java.lang.IllegalStateException: Could not find a valid Docker environment. Please see logs and check configuration
 	at org.testcontainers.dockerclient.DockerClientProviderStrategy.lambda$getFirstValidStrategy$7(DockerClientProviderStrategy.java:274)
 	at java.base/java.util.Optional.orElseThrow(Optional.java:403)
