@@ -10,30 +10,28 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
+import org.neo4j.driver.AuthTokens
 import org.neo4j.driver.GraphDatabase
-import org.testcontainers.containers.Neo4jContainer
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class Neo4jUserRepositoryIT {
-
-    private val container = Neo4jContainer<Nothing>("neo4j:5").apply {
-        withoutAuthentication()
-    }
 
     private lateinit var driver: org.neo4j.driver.Driver
     private lateinit var repository: Neo4jUserRepository
 
     @BeforeAll
     fun startContainer() {
-        container.start()
-        driver = GraphDatabase.driver(container.boltUrl)
+        driver = GraphDatabase.driver(
+            "bolt://localhost:7687",
+            AuthTokens.basic("neo4j", "passwort")
+        )
         repository = Neo4jUserRepository(driver)
     }
 
     @AfterAll
     fun stopContainer() {
         repository.close()
-        container.stop()
+        driver.close()
     }
 
     @BeforeEach
