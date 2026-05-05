@@ -33,3 +33,4 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+core/target/surefire-reports/TEST-service.UserServiceTest.xml
