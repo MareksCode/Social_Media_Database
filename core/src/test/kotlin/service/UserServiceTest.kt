@@ -12,14 +12,18 @@ import org.junit.jupiter.api.Test
 import repository.UserRepository
 
 class UserServiceTest {
-
     private lateinit var repository: UserRepository
     private lateinit var service: UserService
 
-    private val alice = User(
-        id = "1", name = "Alice", email = "alice@example.com",
-        status = Status.ONLINE, interest = "coding",
-        department = "IT", room = "101", profilePicture = null,
+    private val testUser = User(
+        id = "1", 
+        name = "testUser", 
+        email = "testuser@example.com",
+        status = Status.ONLINE, 
+        interest = "clash royale",
+        department = "IT", 
+        room = "007", 
+        profilePicture = null,
         friends = emptyList()
     )
 
@@ -30,16 +34,16 @@ class UserServiceTest {
     }
 
     @Test
-    fun `createUser delegates to repository create`() {
-        every { repository.create(alice) } returns Unit
-        service.createUser(alice)
-        verify(exactly = 1) { repository.create(alice) }
+    fun `createUser uses repository create & does it once`() {
+        every { repository.create(testUser) } returns Unit
+        service.createUser(testUser)
+        verify(exactly = 1) { repository.create(testUser) }
     }
 
     @Test
     fun `getUser returns user from repository`() {
-        every { repository.getById("1") } returns alice
-        assertEquals(alice, service.getUser("1"))
+        every { repository.getById("1") } returns testUser
+        assertEquals(testUser, service.getUser("1"))
         verify(exactly = 1) { repository.getById("1") }
     }
 
@@ -51,27 +55,27 @@ class UserServiceTest {
 
     @Test
     fun `updateUser delegates to repository update`() {
-        every { repository.update(alice) } returns Unit
-        service.updateUser(alice)
-        verify(exactly = 1) { repository.update(alice) }
+        every { repository.update(testUser) } returns Unit
+        service.updateUser(testUser)
+        verify(exactly = 1) { repository.update(testUser) }
     }
 
     @Test
-    fun `deleteUser delegates to repository delete`() {
+    fun `deleteUser uses repository delete & does it once`() {
         every { repository.delete("1") } returns Unit
         service.deleteUser("1")
         verify(exactly = 1) { repository.delete("1") }
     }
 
     @Test
-    fun `addFriend delegates to repository addFriend`() {
+    fun `addFriend uses repository addFriend & does it once`() {
         every { repository.addFriend("1", "2") } returns Unit
         service.addFriend("1", "2")
         verify(exactly = 1) { repository.addFriend("1", "2") }
     }
 
     @Test
-    fun `removeFriend delegates to repository removeFriend`() {
+    fun `removeFriend uses repository removeFriend & does it once`() {
         every { repository.removeFriend("1", "2") } returns Unit
         service.removeFriend("1", "2")
         verify(exactly = 1) { repository.removeFriend("1", "2") }
@@ -79,15 +83,15 @@ class UserServiceTest {
 
     @Test
     fun `getFriends returns list from repository`() {
-        val friends = listOf(alice)
+        val friends = listOf(testUser)
         every { repository.getFriends("1") } returns friends
         assertEquals(friends, service.getFriends("1"))
         verify(exactly = 1) { repository.getFriends("1") }
     }
 
     @Test
-    fun `suggestFriends delegates to getFriendsOfFriends`() {
-        val suggestions = listOf(alice)
+    fun `suggestFriends uses getFriendsOfFriends & does it once`() {
+        val suggestions = listOf(testUser)
         every { repository.getFriendsOfFriends("1") } returns suggestions
         assertEquals(suggestions, service.suggestFriends("1"))
         verify(exactly = 1) { repository.getFriendsOfFriends("1") }

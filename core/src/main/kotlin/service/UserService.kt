@@ -3,8 +3,7 @@ package service
 import model.User
 import repository.UserRepository
 
-class UserService(private val repository: UserRepository) {
-
+class UserService(val repository: UserRepository) {
     fun createUser(user: User) = repository.create(user)
 
     fun getUser(id: String): User? = repository.getById(id)
