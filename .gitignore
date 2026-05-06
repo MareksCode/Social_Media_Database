@@ -38,4 +38,5 @@ core/target/surefire-reports/TEST-service.UserServiceTest.xml
 ### maven ###
 */target/
 
-/.claude/
+.claude/
+.idea/
