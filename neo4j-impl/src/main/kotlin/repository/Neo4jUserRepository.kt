@@ -9,21 +9,22 @@ import org.neo4j.driver.Values.parameters
 import org.neo4j.driver.types.Node
 
 class Neo4jUserRepository(private val driver: Driver) : UserRepository {
-
-    companion object {
-        fun connect(uri: String, user: String, password: String): Neo4jUserRepository =
-            Neo4jUserRepository(GraphDatabase.driver(uri, AuthTokens.basic(user, password)))
+    companion object { //static 
+        fun connect(uri: String, user: String, password: String): Neo4jUserRepository = Neo4jUserRepository(GraphDatabase.driver(uri, AuthTokens.basic(user, password)))
     }
 
     private fun nodeToUser(node: Node, friendIds: List<String> = emptyList()): User = User(
         id = node["id"].asString(),
         name = node["name"].asString(),
         email = node["email"].asString(),
-        status = Status.entries.firstOrNull { it.name == node["status"].asString() } ?: Status.OFFLINE,
+        status = Status.entries.firstOrNull { //returns first matching entry or null
+            it.name == node["status"].asString() 
+        } ?: Status.OFFLINE, //if null
         interest = node["interest"].asString(),
         department = node["department"].asString(),
         room = node["room"].asString(),
-        profilePicture = if (node["profilePicture"].isNull) null else node["profilePicture"].asString(),
+        profilePicture = if (node["profilePicture"].isNull) null 
+                        else node["profilePicture"].asString(),
         friends = friendIds
     )
 
