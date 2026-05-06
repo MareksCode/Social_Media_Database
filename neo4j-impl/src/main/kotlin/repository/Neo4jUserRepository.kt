@@ -21,9 +21,9 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
         email = node["email"].asString(),
         status = Status.entries.firstOrNull { it.name == node["status"].asString() } ?: Status.OFFLINE,
         interest = node["interest"].asString(),
-        abteilung = node["abteilung"].asString(),
-        raum = node["raum"].asString(),
-        profilbild = if (node["profilbild"].isNull) null else node["profilbild"].asString(),
+        department = node["department"].asString(),
+        room = node["room"].asString(),
+        profilePicture = if (node["profilePicture"].isNull) null else node["profilePicture"].asString(),
         friends = friendIds
     )
 
@@ -32,14 +32,14 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
             session.run(
                 """CREATE (u:User {
                     id: ${'$'}id, name: ${'$'}name, email: ${'$'}email, status: ${'$'}status,
-                    interest: ${'$'}interest, abteilung: ${'$'}abteilung, raum: ${'$'}raum,
-                    profilbild: ${'$'}profilbild
+                    interest: ${'$'}interest, department: ${'$'}department, room: ${'$'}room,
+                    profilePicture: ${'$'}profilePicture
                 })""",
                 parameters(
                     "id", user.id, "name", user.name, "email", user.email,
                     "status", user.status.name, "interest", user.interest,
-                    "abteilung", user.abteilung, "raum", user.raum,
-                    "profilbild", user.profilbild
+                    "department", user.department, "room", user.room,
+                    "profilePicture", user.profilePicture
                 )
             )
         }
@@ -65,14 +65,14 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
             session.run(
                 """MATCH (u:User {id: ${'$'}id}) SET u += {
                     name: ${'$'}name, email: ${'$'}email, status: ${'$'}status,
-                    interest: ${'$'}interest, abteilung: ${'$'}abteilung, raum: ${'$'}raum,
-                    profilbild: ${'$'}profilbild
+                    interest: ${'$'}interest, department: ${'$'}department, room: ${'$'}room,
+                    profilePicture: ${'$'}profilePicture
                 }""",
                 parameters(
                     "id", user.id, "name", user.name, "email", user.email,
                     "status", user.status.name, "interest", user.interest,
-                    "abteilung", user.abteilung, "raum", user.raum,
-                    "profilbild", user.profilbild
+                    "department", user.department, "room", user.room,
+                    "profilePicture", user.profilePicture
                 )
             )
         }

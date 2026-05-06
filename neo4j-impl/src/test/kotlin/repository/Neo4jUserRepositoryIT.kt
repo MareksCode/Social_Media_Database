@@ -42,7 +42,7 @@ class Neo4jUserRepositoryIT {
     private fun user(id: String, name: String = "User$id") = User(
         id = id, name = name, email = "$id@example.com",
         status = Status.ONLINE, interest = "testing",
-        abteilung = "IT", raum = "101", profilbild = null,
+        department = "IT", room = "101", profilePicture = null,
         friends = emptyList()
     )
 
@@ -61,7 +61,7 @@ class Neo4jUserRepositoryIT {
     @Test
     fun `update changes fields`() {
         repository.create(user("1", "Alice"))
-        val updated = user("1", "Alice Updated").copy(status = Status.BUSY, raum = "999")
+        val updated = user("1", "Alice Updated").copy(status = Status.BUSY, room = "999")
         repository.update(updated)
         assertEquals(updated, repository.getById("1"))
     }
@@ -134,15 +134,15 @@ class Neo4jUserRepositoryIT {
     }
 
     @Test
-    fun `null profilbild roundtrips as null`() {
+    fun `null profilePicture roundtrips as null`() {
         repository.create(user("1"))
-        assertNull(repository.getById("1")!!.profilbild)
+        assertNull(repository.getById("1")!!.profilePicture)
     }
 
     @Test
-    fun `non-null profilbild roundtrips correctly`() {
-        val u = user("1").copy(profilbild = "https://example.com/pic.jpg")
+    fun `non-null profilePicture roundtrips correctly`() {
+        val u = user("1").copy(profilePicture = "https://example.com/pic.jpg")
         repository.create(u)
-        assertEquals("https://example.com/pic.jpg", repository.getById("1")!!.profilbild)
+        assertEquals("https://example.com/pic.jpg", repository.getById("1")!!.profilePicture)
     }
 }

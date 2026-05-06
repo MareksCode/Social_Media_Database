@@ -35,4 +35,7 @@ bin/
 .DS_Store
 core/target/surefire-reports/TEST-service.UserServiceTest.xml
 
-.claude/
+### maven ###
+*/target/
+
+/.claude/

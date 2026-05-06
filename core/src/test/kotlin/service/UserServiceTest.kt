@@ -19,7 +19,7 @@ class UserServiceTest {
     private val alice = User(
         id = "1", name = "Alice", email = "alice@example.com",
         status = Status.ONLINE, interest = "coding",
-        abteilung = "IT", raum = "101", profilbild = null,
+        department = "IT", room = "101", profilePicture = null,
         friends = emptyList()
     )
 

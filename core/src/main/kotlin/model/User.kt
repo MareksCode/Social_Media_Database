@@ -6,8 +6,8 @@ data class User(
     val email: String,
     val status: Status,
     val interest: String,
-    val abteilung: String,
-    val raum: String,
-    val profilbild: String?,
+    val department: String,
+    val room: String,
+    val profilePicture: String?,
     val friends: List<String>
 )
