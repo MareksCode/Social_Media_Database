@@ -19,7 +19,7 @@ class Neo4jUserRepositoryIT {
     private lateinit var repository: Neo4jUserRepository
 
     @BeforeAll
-    fun startContainer() {
+    fun start() {
         driver = GraphDatabase.driver(
             "bolt://localhost:7687",
             AuthTokens.basic("neo4j", "passwort")
@@ -28,7 +28,7 @@ class Neo4jUserRepositoryIT {
     }
 
     @AfterAll
-    fun stopContainer() {
+    fun stop() {
         repository.close()
         driver.close()
     }
@@ -39,14 +39,19 @@ class Neo4jUserRepositoryIT {
     }
 
     private fun user(id: String, name: String = "User$id") = User(
-        id = id, name = name, email = "$id@example.com",
-        status = Status.ONLINE, interest = "testing",
-        department = "IT", room = "101", profilePicture = null,
+        id = id, 
+        name = name, 
+        email = "$id@example.com",
+        status = Status.ONLINE, 
+        interest = "testing",
+        department = "IT", 
+        room = "101", 
+        profilePicture = null,
         friends = emptyList()
     )
 
     @Test
-    fun `create and getById roundtrip`() {
+    fun `create and getById`() {
         val u = user("1", "Alice")
         repository.create(u)
         assertEquals(u, repository.getById("1"))
@@ -82,7 +87,7 @@ class Neo4jUserRepositoryIT {
     }
 
     @Test
-    fun `addFriend reflects in friends list via relationship`() {
+    fun `addFriend works`() {
         repository.create(user("1", "Alice"))
         repository.create(user("2", "Bob"))
         repository.addFriend("1", "2")
@@ -133,13 +138,13 @@ class Neo4jUserRepositoryIT {
     }
 
     @Test
-    fun `null profilePicture roundtrips as null`() {
+    fun `null profilePicture returns as null`() {
         repository.create(user("1"))
         assertNull(repository.getById("1")!!.profilePicture)
     }
 
     @Test
-    fun `non-null profilePicture roundtrips correctly`() {
+    fun `non-null profilePicture returns correctly`() {
         val u = user("1").copy(profilePicture = "https://example.com/pic.jpg")
         repository.create(u)
         assertEquals("https://example.com/pic.jpg", repository.getById("1")!!.profilePicture)
