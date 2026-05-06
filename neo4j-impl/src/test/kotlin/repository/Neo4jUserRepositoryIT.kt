@@ -15,7 +15,6 @@ import org.neo4j.driver.GraphDatabase
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class Neo4jUserRepositoryIT {
-
     private lateinit var driver: org.neo4j.driver.Driver
     private lateinit var repository: Neo4jUserRepository
 
