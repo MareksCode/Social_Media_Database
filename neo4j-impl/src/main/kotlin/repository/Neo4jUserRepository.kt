@@ -121,11 +121,39 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
     }
 
     override fun sendFriendRequest(fromId: String, toId: String) {
-        TODO("not yet implemented")
+        driver.session().use { session ->
+            session.run(
+                """MATCH (from:User {id: ${'$'}fromId}), (to:User {id: ${'$'}toId})
+                   OPTIONAL MATCH (to)-[reverse:SENT_REQUEST]->(from)
+                   WITH from, to, reverse, reverse IS NOT NULL AS isMutual
+                   CALL {
+                     WITH from, to, reverse, isMutual
+                     WITH from, to, reverse WHERE isMutual
+                     DELETE reverse
+                     MERGE (from)-[:FRIENDS_WITH]->(to)
+                     MERGE (to)-[:FRIENDS_WITH]->(from)
+                   }
+                   CALL {
+                     WITH from, to, isMutual
+                     WITH from, to WHERE NOT isMutual
+                     MERGE (from)-[:SENT_REQUEST]->(to)
+                   }
+                   RETURN isMutual""",
+                parameters("fromId", fromId, "toId", toId)
+            )
+        }
     }
 
     override fun getPendingFriendRequests(userId: String): List<FriendRequest> {
-        TODO("not yet implemented")
+        return driver.session().use { session ->
+            session.run(
+                """MATCH (from:User)-[:SENT_REQUEST]->(to:User {id: ${'$'}userId})
+                   RETURN from.id AS fromId, to.id AS toId""",
+                parameters("userId", userId)
+            ).list { record ->
+                FriendRequest(record["fromId"].asString(), record["toId"].asString())
+            }
+        }
     }
 
     override fun getFriends(userId: String): List<User> {

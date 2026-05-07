@@ -1,11 +1,13 @@
 package repository
 
+import model.FriendRequest
 import model.Status
 import model.User
 import model.UserExposedProperty
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -117,5 +119,97 @@ class Neo4jUserRepositoryIT {
     @Test
     fun `getProperty returns null for unknown user`() {
         assertNull(repository.getProperty("missing", UserExposedProperty.NAME))
+    }
+
+    @Test
+    fun `sendFriendRequest stores pending request`() {
+        repository.create(user("1", "Alice"))
+        repository.create(user("2", "Bob"))
+        repository.sendFriendRequest("1", "2")
+        val pending = repository.getPendingFriendRequests("2")
+        assertEquals(1, pending.size)
+        assertEquals("1", pending[0].fromId)
+        assertEquals("2", pending[0].toId)
+    }
+
+    @Test
+    fun `sendFriendRequest mutual send creates friendship`() {
+        repository.create(user("1", "Alice"))
+        repository.create(user("2", "Bob"))
+        repository.sendFriendRequest("1", "2")
+        repository.sendFriendRequest("2", "1")
+        assertTrue("2" in repository.getFriends("1").map { it.id })
+        assertTrue("1" in repository.getFriends("2").map { it.id })
+    }
+
+    @Test
+    fun `sendFriendRequest mutual send removes pending requests`() {
+        repository.create(user("1", "Alice"))
+        repository.create(user("2", "Bob"))
+        repository.sendFriendRequest("1", "2")
+        repository.sendFriendRequest("2", "1")
+        assertTrue(repository.getPendingFriendRequests("1").isEmpty())
+        assertTrue(repository.getPendingFriendRequests("2").isEmpty())
+    }
+
+    @Test
+    fun `getPendingFriendRequests returns only requests sent to userId`() {
+        repository.create(user("1", "Alice"))
+        repository.create(user("2", "Bob"))
+        repository.create(user("3", "Carol"))
+        repository.sendFriendRequest("2", "1")
+        repository.sendFriendRequest("3", "1")
+        val pending = repository.getPendingFriendRequests("1")
+        assertEquals(2, pending.size)
+        assertTrue(pending.all { it.toId == "1" })
+    }
+
+    @Test
+    fun `getPendingFriendRequests does not return sent requests`() {
+        repository.create(user("1", "Alice"))
+        repository.create(user("2", "Bob"))
+        repository.sendFriendRequest("1", "2")
+        assertTrue(repository.getPendingFriendRequests("1").isEmpty())
+    }
+
+    @Test
+    fun `removeFriend removes relationship on both sides`() {
+        repository.create(user("1", "Alice"))
+        repository.create(user("2", "Bob"))
+        repository.sendFriendRequest("1", "2")
+        repository.sendFriendRequest("2", "1")
+        repository.removeFriend("1", "2")
+        assertTrue(repository.getFriends("1").isEmpty())
+        assertTrue(repository.getFriends("2").isEmpty())
+    }
+
+    @Test
+    fun `getFriendsOfFriends returns 2-hop users excluding direct friends and self`() {
+        repository.create(user("A"))
+        repository.create(user("B"))
+        repository.create(user("C"))
+        repository.sendFriendRequest("A", "B"); repository.sendFriendRequest("B", "A")
+        repository.sendFriendRequest("B", "C"); repository.sendFriendRequest("C", "B")
+        val fof = repository.getFriendsOfFriends("A").map { it.id }
+        assertTrue("C" in fof)
+        assertTrue("A" !in fof)
+        assertTrue("B" !in fof)
+    }
+
+    @Test
+    fun `getFriendsOfFriends orders by common friend count descending`() {
+        repository.create(user("A"))
+        repository.create(user("B"))
+        repository.create(user("C"))
+        repository.create(user("D"))
+        repository.create(user("E"))
+        repository.sendFriendRequest("A", "B"); repository.sendFriendRequest("B", "A")
+        repository.sendFriendRequest("A", "C"); repository.sendFriendRequest("C", "A")
+        repository.sendFriendRequest("B", "D"); repository.sendFriendRequest("D", "B")
+        repository.sendFriendRequest("C", "D"); repository.sendFriendRequest("D", "C")
+        repository.sendFriendRequest("B", "E"); repository.sendFriendRequest("E", "B")
+        val fof = repository.getFriendsOfFriends("A").map { it.id }
+        assertEquals("D", fof[0])
+        assertEquals("E", fof[1])
     }
 }
