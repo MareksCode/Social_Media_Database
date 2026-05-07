@@ -24,8 +24,7 @@ class UserService(private val repository: UserRepository) {
             interest = interest,
             department = department,
             room = room,
-            profilePicture = null,
-            friends = emptyList()
+            profilePicture = null
         )
         repository.create(user)
         return user

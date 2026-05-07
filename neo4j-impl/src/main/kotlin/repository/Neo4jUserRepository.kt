@@ -10,14 +10,13 @@ import org.neo4j.driver.GraphDatabase
 import org.neo4j.driver.Values.parameters
 import org.neo4j.driver.types.Node
 
-class Neo4jUserRepositoryReadable(private val driver: Driver) : UserRepository {
-
+class Neo4jUserRepository(private val driver: Driver) : UserRepository {
     companion object {
-        fun connect(uri: String, username: String, password: String): Neo4jUserRepositoryReadable =
-            Neo4jUserRepositoryReadable(GraphDatabase.driver(uri, AuthTokens.basic(username, password)))
+        fun connect(uri: String, username: String, password: String): Neo4jUserRepository =
+            Neo4jUserRepository(GraphDatabase.driver(uri, AuthTokens.basic(username, password)))
     }
 
-    // Maps our Kotlin enum to the exact property key stored in the Neo4j node
+    //maps enum to corresponding neo4j properties
     private fun UserExposedProperty.toNeo4jPropertyKey(): String = when (this) {
         UserExposedProperty.NAME -> "name"
         UserExposedProperty.EMAIL -> "email"
@@ -28,10 +27,8 @@ class Neo4jUserRepositoryReadable(private val driver: Driver) : UserRepository {
         UserExposedProperty.PROFILE_PICTURE -> "profilePicture"
     }
 
-    // Extension function: converts a raw Neo4j Node into our User model.
-    // Defined as an extension because the conversion logic builds on top of Node's basic API,
-    // which is exactly the use case described in Kotlin's style guide for extension functions.
-    private fun Node.toUser(friendIds: List<String> = emptyList()): User = User(
+    //maps node to user model
+    private fun Node.toUser(): User = User(
         id = this["id"].asString(),
         name = this["name"].asString(),
         email = this["email"].asString(),
@@ -39,8 +36,7 @@ class Neo4jUserRepositoryReadable(private val driver: Driver) : UserRepository {
         interest = this["interest"].asString(),
         department = this["department"].asString(),
         room = this["room"].asString(),
-        profilePicture = if (this["profilePicture"].isNull) null else this["profilePicture"].asString(),
-        friends = friendIds
+        profilePicture = if (this["profilePicture"].isNull) null else this["profilePicture"].asString()
     )
 
     override fun create(user: User) {
@@ -73,20 +69,12 @@ class Neo4jUserRepositoryReadable(private val driver: Driver) : UserRepository {
     override fun getById(id: String): User? {
         driver.session().use { session ->
             val queryResult = session.run(
-                """MATCH (user:User {id: ${'$'}userId})
-                   OPTIONAL MATCH (user)-[:FRIENDS_WITH]->(friend:User)
-                   RETURN user, collect(friend.id) AS friendIds""",
+                "MATCH (user:User {id: \$userId}) RETURN user",
                 parameters("userId", id)
             )
             val matchedRecords = queryResult.list()
-            if (matchedRecords.isEmpty()) {
-                return null
-            }
-
-            val firstRecord = matchedRecords[0]
-            val userNode = firstRecord["user"].asNode()
-            val friendIds = firstRecord["friendIds"].asList { it.asString() }
-            return userNode.toUser(friendIds)
+            if (matchedRecords.isEmpty()) return null
+            return matchedRecords[0]["user"].asNode().toUser()
         }
     }
 
@@ -172,14 +160,10 @@ class Neo4jUserRepositoryReadable(private val driver: Driver) : UserRepository {
     override fun getFriends(userId: String): List<User> {
         driver.session().use { session ->
             val queryResult = session.run(
-                """MATCH (user:User {id: ${'$'}userId})-[:FRIENDS_WITH]->(friend:User)
-                   OPTIONAL MATCH (friend)-[:FRIENDS_WITH]->(friendOfFriend:User)
-                   RETURN friend, collect(friendOfFriend.id) AS friendOfFriendIds""",
+                "MATCH (user:User {id: \$userId})-[:FRIENDS_WITH]->(friend:User) RETURN friend",
                 parameters("userId", userId)
             )
-            return queryResult.list { record ->
-                record["friend"].asNode().toUser(record["friendOfFriendIds"].asList { it.asString() })
-            }
+            return queryResult.list { record -> record["friend"].asNode().toUser() }
         }
     }
 
@@ -200,15 +184,11 @@ class Neo4jUserRepositoryReadable(private val driver: Driver) : UserRepository {
                 """MATCH (targetUser:User {id: ${'$'}userId})-[:FRIENDS_WITH]->(directFriend)-[:FRIENDS_WITH]->(friendOfFriend)
                    WHERE NOT (targetUser)-[:FRIENDS_WITH]->(friendOfFriend) AND friendOfFriend <> targetUser
                    WITH friendOfFriend, count(directFriend) AS sharedFriendCount
-                   OPTIONAL MATCH (friendOfFriend)-[:FRIENDS_WITH]->(friendOfFriendContact:User)
-                   WITH friendOfFriend, sharedFriendCount, collect(friendOfFriendContact.id) AS friendOfFriendContactIds
                    ORDER BY sharedFriendCount DESC
-                   RETURN friendOfFriend, friendOfFriendContactIds""",
+                   RETURN friendOfFriend""",
                 parameters("userId", userId)
             )
-            return queryResult.list { record ->
-                record["friendOfFriend"].asNode().toUser(record["friendOfFriendContactIds"].asList { it.asString() })
-            }
+            return queryResult.list { record -> record["friendOfFriend"].asNode().toUser() }
         }
     }
 

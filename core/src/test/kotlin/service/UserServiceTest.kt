@@ -23,7 +23,7 @@ class UserServiceTest {
         id = "1", name = "testUser", email = "testuser@example.com",
         status = Status.ONLINE, interest = "clash royale",
         department = "IT", room = "007",
-        profilePicture = null, friends = emptyList()
+        profilePicture = null
     )
 
     @Test
