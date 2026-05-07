@@ -8,11 +8,11 @@ class UserService(val repository: UserRepository) {
 
     fun getUser(id: String): User? = repository.getById(id)
 
-    fun updateUser(user: User) = repository.update(user)
+    fun updateUser(user: User): Unit = TODO("not yet implemented")
 
     fun deleteUser(id: String) = repository.delete(id)
 
-    fun addFriend(userId: String, friendId: String) = repository.addFriend(userId, friendId)
+    fun addFriend(userId: String, friendId: String): Unit = TODO("not yet implemented")
 
     fun removeFriend(userId: String, friendId: String) = repository.removeFriend(userId, friendId)
 

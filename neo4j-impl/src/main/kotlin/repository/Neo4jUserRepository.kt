@@ -1,7 +1,9 @@
 package repository
 
+import model.FriendRequest
 import model.Status
 import model.User
+import model.UserExposedProperty
 import org.neo4j.driver.AuthTokens
 import org.neo4j.driver.Driver
 import org.neo4j.driver.GraphDatabase
@@ -9,22 +11,30 @@ import org.neo4j.driver.Values.parameters
 import org.neo4j.driver.types.Node
 
 class Neo4jUserRepository(private val driver: Driver) : UserRepository {
-    companion object { //static 
-        fun connect(uri: String, user: String, password: String): Neo4jUserRepository = Neo4jUserRepository(GraphDatabase.driver(uri, AuthTokens.basic(user, password)))
+    companion object {
+        fun connect(uri: String, user: String, password: String): Neo4jUserRepository =
+            Neo4jUserRepository(GraphDatabase.driver(uri, AuthTokens.basic(user, password)))
+    }
+
+    private fun UserExposedProperty.toNeo4jKey(): String = when (this) {
+        UserExposedProperty.NAME -> "name"
+        UserExposedProperty.EMAIL -> "email"
+        UserExposedProperty.STATUS -> "status"
+        UserExposedProperty.INTEREST -> "interest"
+        UserExposedProperty.DEPARTMENT -> "department"
+        UserExposedProperty.ROOM -> "room"
+        UserExposedProperty.PROFILE_PICTURE -> "profilePicture"
     }
 
     private fun nodeToUser(node: Node, friendIds: List<String> = emptyList()): User = User(
         id = node["id"].asString(),
         name = node["name"].asString(),
         email = node["email"].asString(),
-        status = Status.entries.firstOrNull { //returns first matching entry or null
-            it.name == node["status"].asString() 
-        } ?: Status.OFFLINE, //if null
+        status = Status.entries.firstOrNull { it.name == node["status"].asString() } ?: Status.OFFLINE,
         interest = node["interest"].asString(),
         department = node["department"].asString(),
         room = node["room"].asString(),
-        profilePicture = if (node["profilePicture"].isNull) null 
-                        else node["profilePicture"].asString(),
+        profilePicture = if (node["profilePicture"].isNull) null else node["profilePicture"].asString(),
         friends = friendIds
     )
 
@@ -32,22 +42,22 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
         driver.session().use { session ->
             session.run(
                 """CREATE (u:User {
-                    id: ${'$'}id, 
-                    name: ${'$'}name, 
-                    email: ${'$'}email, 
+                    id: ${'$'}id,
+                    name: ${'$'}name,
+                    email: ${'$'}email,
                     status: ${'$'}status,
-                    interest: ${'$'}interest, 
-                    department: ${'$'}department, 
+                    interest: ${'$'}interest,
+                    department: ${'$'}department,
                     room: ${'$'}room,
                     profilePicture: ${'$'}profilePicture
                 })""",
                 parameters(
-                    "id", user.id, 
-                    "name", user.name, 
+                    "id", user.id,
+                    "name", user.name,
                     "email", user.email,
-                    "status", user.status.name, 
+                    "status", user.status.name,
                     "interest", user.interest,
-                    "department", user.department, 
+                    "department", user.department,
                     "room", user.room,
                     "profilePicture", user.profilePicture
                 )
@@ -70,41 +80,29 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
         }
     }
 
-    override fun update(user: User) {
+    override fun delete(id: String) {
         driver.session().use { session ->
             session.run(
-                """MATCH (u:User {id: ${'$'}id}) 
-                    SET u += {
-                        name: ${'$'}name, 
-                        email: ${'$'}email, 
-                        status: ${'$'}status,
-                        interest: ${'$'}interest, 
-                        department: ${'$'}department, 
-                        room: ${'$'}room,
-                        profilePicture: ${'$'}profilePicture
-                }""",
-                parameters(
-                    "id", user.id, 
-                    "name", user.name, 
-                    "email", user.email,
-                    "status", user.status.name, 
-                    "interest", user.interest,
-                    "department", user.department, 
-                    "room", user.room,
-                    "profilePicture", user.profilePicture
-                )
+                "MATCH (u:User {id: ${'$'}id}) DETACH DELETE u",
+                parameters("id", id)
             )
         }
     }
 
-    override fun delete(id: String) {
-        driver.session().use { session ->
-            session.run(
-                """MATCH (u:User {id: ${'$'}id}) 
-                DETACH DELETE u""",
-                parameters("id", id)
-            )
-        }
+    override fun updateProperty(id: String, property: UserExposedProperty, value: Any?) {
+        TODO("not yet implemented")
+    }
+
+    override fun getProperty(id: String, property: UserExposedProperty): Any? {
+        TODO("not yet implemented")
+    }
+
+    override fun sendFriendRequest(fromId: String, toId: String) {
+        TODO("not yet implemented")
+    }
+
+    override fun getPendingFriendRequests(userId: String): List<FriendRequest> {
+        TODO("not yet implemented")
     }
 
     override fun getFriends(userId: String): List<User> {
@@ -121,26 +119,13 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
         }
     }
 
-    override fun addFriend(userId: String, friendId: String) {
-        driver.session().use { session ->
-            session.run(
-                """MATCH (a:User {id: ${'$'}userId}), (b:User {id: ${'$'}friendId})
-                    MERGE (a)-[:FRIENDS_WITH]->(b)
-                    MERGE (b)-[:FRIENDS_WITH]->(a)""",
-                parameters("userId", userId, 
-                "friendId", friendId)
-            )
-        }
-    }
-
     override fun removeFriend(userId: String, friendId: String) {
         driver.session().use { session ->
             session.run(
                 """MATCH (a:User {id: ${'$'}userId})-[r1:FRIENDS_WITH]->(b:User {id: ${'$'}friendId})
-                    OPTIONAL MATCH (b)-[r2:FRIENDS_WITH]->(a)
-                    DELETE r1, r2""",
-                parameters("userId", userId, 
-                "friendId", friendId)
+                   OPTIONAL MATCH (b)-[r2:FRIENDS_WITH]->(a)
+                   DELETE r1, r2""",
+                parameters("userId", userId, "friendId", friendId)
             )
         }
     }

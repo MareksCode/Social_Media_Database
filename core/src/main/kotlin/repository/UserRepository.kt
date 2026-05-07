@@ -1,22 +1,18 @@
 package repository
 
+import model.FriendRequest
 import model.User
+import model.UserExposedProperty
 
 interface UserRepository {
     fun create(user: User)
-
     fun getById(id: String): User?
-
-    fun update(user: User)
-
     fun delete(id: String)
-
+    fun updateProperty(id: String, property: UserExposedProperty, value: Any?)
+    fun getProperty(id: String, property: UserExposedProperty): Any?
+    fun sendFriendRequest(fromId: String, toId: String)
+    fun getPendingFriendRequests(userId: String): List<FriendRequest>
     fun getFriends(userId: String): List<User>
-
-    fun addFriend(userId: String, friendId: String)
-
     fun removeFriend(userId: String, friendId: String)
-
-    // Returns friends of friends who are not already friends of the user, sorted by number of common friends
     fun getFriendsOfFriends(userId: String): List<User>
 }
