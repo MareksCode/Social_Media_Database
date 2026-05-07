@@ -3,83 +3,138 @@ package service
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import model.FriendRequest
 import model.Status
 import model.User
+import model.UserExposedProperty
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import repository.UserRepository
 
 class UserServiceTest {
-    private lateinit var repository: UserRepository
-    private lateinit var service: UserService
+    private val repository = mockk<UserRepository>(relaxed = true)
+    private val service = UserService(repository)
 
     private val testUser = User(
-        id = "1", 
-        name = "testUser", 
-        email = "testuser@example.com",
-        status = Status.ONLINE, 
-        interest = "clash royale",
-        department = "IT", 
-        room = "007", 
-        profilePicture = null,
-        friends = emptyList()
+        id = "1", name = "testUser", email = "testuser@example.com",
+        status = Status.ONLINE, interest = "clash royale",
+        department = "IT", room = "007",
+        profilePicture = null, friends = emptyList()
     )
 
-    @BeforeEach
-    fun setup() {
-        repository = mockk()
-        service = UserService(repository)
+    @Test
+    fun `createUser generates non-blank id and stores user`() {
+        service.createUser("testUser", "testuser@example.com", Status.ONLINE, "clash royale", "IT", "007")
+        verify { repository.create(match { it.id.isNotBlank() && it.name == "testUser" }) }
     }
 
     @Test
-    fun `createUser uses repository create & does it once`() {
-        every { repository.create(testUser) } returns Unit
-        service.createUser(testUser)
-        verify(exactly = 1) { repository.create(testUser) }
+    fun `createUser returns user with generated id`() {
+        val result = service.createUser("testUser", "testuser@example.com", Status.ONLINE, "clash royale", "IT", "007")
+        assert(result.id.isNotBlank())
+        assertEquals("testUser", result.name)
+    }
+
+    @Test
+    fun `createUser sets profilePicture to null by default`() {
+        val result = service.createUser("testUser", "testuser@example.com", Status.ONLINE, "clash royale", "IT", "007")
+        assertNull(result.profilePicture)
+    }
+
+    @Test
+    fun `createUser generates unique ids`() {
+        val a = service.createUser("A", "a@example.com", Status.ONLINE, "chess", "IT", "1")
+        val b = service.createUser("B", "b@example.com", Status.ONLINE, "chess", "IT", "2")
+        assert(a.id != b.id)
     }
 
     @Test
     fun `getUser returns user from repository`() {
         every { repository.getById("1") } returns testUser
         assertEquals(testUser, service.getUser("1"))
-        verify(exactly = 1) { repository.getById("1") }
     }
 
     @Test
-    fun `getUser returns null when repository returns null`() {
+    fun `getUser returns null when not found`() {
         every { repository.getById("99") } returns null
         assertNull(service.getUser("99"))
     }
 
     @Test
-    fun `deleteUser uses repository delete & does it once`() {
-        every { repository.delete("1") } returns Unit
+    fun `deleteUser delegates to repository`() {
         service.deleteUser("1")
-        verify(exactly = 1) { repository.delete("1") }
+        verify { repository.delete("1") }
     }
 
     @Test
-    fun `removeFriend uses repository removeFriend & does it once`() {
-        every { repository.removeFriend("1", "2") } returns Unit
+    fun `change delegates String property to repository`() {
+        service.change("1", UserExposedProperty.NAME, "Bob")
+        verify { repository.updateProperty("1", UserExposedProperty.NAME, "Bob") }
+    }
+
+    @Test
+    fun `change delegates Status property to repository`() {
+        service.change("1", UserExposedProperty.STATUS, Status.BUSY)
+        verify { repository.updateProperty("1", UserExposedProperty.STATUS, Status.BUSY) }
+    }
+
+    @Test
+    fun `change throws IllegalArgumentException on type mismatch for NAME`() {
+        assertThrows<IllegalArgumentException> { service.change("1", UserExposedProperty.NAME, 42) }
+    }
+
+    @Test
+    fun `change throws IllegalArgumentException on type mismatch for STATUS`() {
+        assertThrows<IllegalArgumentException> { service.change("1", UserExposedProperty.STATUS, "ONLINE") }
+    }
+
+    @Test
+    fun `change allows null for PROFILE_PICTURE`() {
+        service.change("1", UserExposedProperty.PROFILE_PICTURE, null)
+        verify { repository.updateProperty("1", UserExposedProperty.PROFILE_PICTURE, null) }
+    }
+
+    @Test
+    fun `change throws IllegalArgumentException when null passed for non-nullable property`() {
+        assertThrows<IllegalArgumentException> { service.change("1", UserExposedProperty.NAME, null) }
+    }
+
+    @Test
+    fun `get delegates to repository`() {
+        every { repository.getProperty("1", UserExposedProperty.NAME) } returns "Alice"
+        assertEquals("Alice", service.get("1", UserExposedProperty.NAME))
+    }
+
+    @Test
+    fun `sendFriendRequest delegates to repository`() {
+        service.sendFriendRequest("1", "2")
+        verify { repository.sendFriendRequest("1", "2") }
+    }
+
+    @Test
+    fun `getPendingFriendRequests delegates to repository`() {
+        val requests = listOf(FriendRequest("2", "1"))
+        every { repository.getPendingFriendRequests("1") } returns requests
+        assertEquals(requests, service.getPendingFriendRequests("1"))
+    }
+
+    @Test
+    fun `getFriends delegates to repository`() {
+        every { repository.getFriends("1") } returns listOf(testUser)
+        assertEquals(listOf(testUser), service.getFriends("1"))
+    }
+
+    @Test
+    fun `suggestFriends delegates to getFriendsOfFriends`() {
+        every { repository.getFriendsOfFriends("1") } returns listOf(testUser)
+        assertEquals(listOf(testUser), service.suggestFriends("1"))
+    }
+
+    @Test
+    fun `removeFriend delegates to repository`() {
         service.removeFriend("1", "2")
-        verify(exactly = 1) { repository.removeFriend("1", "2") }
-    }
-
-    @Test
-    fun `getFriends returns list from repository`() {
-        val friends = listOf(testUser)
-        every { repository.getFriends("1") } returns friends
-        assertEquals(friends, service.getFriends("1"))
-        verify(exactly = 1) { repository.getFriends("1") }
-    }
-
-    @Test
-    fun `suggestFriends uses getFriendsOfFriends & does it once`() {
-        val suggestions = listOf(testUser)
-        every { repository.getFriendsOfFriends("1") } returns suggestions
-        assertEquals(suggestions, service.suggestFriends("1"))
-        verify(exactly = 1) { repository.getFriendsOfFriends("1") }
+        verify { repository.removeFriend("1", "2") }
     }
 }
