@@ -110,8 +110,9 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
                 "MATCH (u:User {id: \$id}) RETURN u.$key AS value",
                 parameters("id", id)
             )
-            if (!result.hasNext()) return@use null
-            val raw = result.single()["value"]
+            val records = result.list()
+            if (records.isEmpty()) return@use null
+            val raw = records[0]["value"]
             if (raw.isNull) return@use null
             if (property == UserExposedProperty.STATUS)
                 Status.entries.firstOrNull { it.name == raw.asString() } ?: Status.OFFLINE

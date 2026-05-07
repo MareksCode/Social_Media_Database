@@ -61,8 +61,10 @@ class UserService(private val repository: UserRepository) {
     fun get(userId: String, property: UserExposedProperty): Any? =
         repository.getProperty(userId, property)
 
-    fun sendFriendRequest(fromId: String, toId: String) =
+    fun sendFriendRequest(fromId: String, toId: String) {
+        require(fromId != toId) { "Cannot send friend request to yourself" }
         repository.sendFriendRequest(fromId, toId)
+    }
 
     fun getPendingFriendRequests(userId: String): List<FriendRequest> =
         repository.getPendingFriendRequests(userId)

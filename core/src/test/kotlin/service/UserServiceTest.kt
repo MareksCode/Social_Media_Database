@@ -122,6 +122,11 @@ class UserServiceTest {
     }
 
     @Test
+    fun `sendFriendRequest throws when fromId equals toId`() {
+        assertThrows<IllegalArgumentException> { service.sendFriendRequest("1", "1") }
+    }
+
+    @Test
     fun `getPendingFriendRequests delegates to repository`() {
         val requests = listOf(FriendRequest("2", "1"))
         every { repository.getPendingFriendRequests("1") } returns requests
