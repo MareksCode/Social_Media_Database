@@ -10,13 +10,15 @@ import org.neo4j.driver.GraphDatabase
 import org.neo4j.driver.Values.parameters
 import org.neo4j.driver.types.Node
 
-class Neo4jUserRepository(private val driver: Driver) : UserRepository {
+class Neo4jUserRepositoryReadable(private val driver: Driver) : UserRepository {
+
     companion object {
-        fun connect(uri: String, user: String, password: String): Neo4jUserRepository =
-            Neo4jUserRepository(GraphDatabase.driver(uri, AuthTokens.basic(user, password)))
+        fun connect(uri: String, username: String, password: String): Neo4jUserRepositoryReadable =
+            Neo4jUserRepositoryReadable(GraphDatabase.driver(uri, AuthTokens.basic(username, password)))
     }
 
-    private fun UserExposedProperty.toNeo4jKey(): String = when (this) {
+    // Maps our Kotlin enum to the exact property key stored in the Neo4j node
+    private fun UserExposedProperty.toNeo4jPropertyKey(): String = when (this) {
         UserExposedProperty.NAME -> "name"
         UserExposedProperty.EMAIL -> "email"
         UserExposedProperty.STATUS -> "status"
@@ -26,15 +28,18 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
         UserExposedProperty.PROFILE_PICTURE -> "profilePicture"
     }
 
-    private fun nodeToUser(node: Node, friendIds: List<String> = emptyList()): User = User(
-        id = node["id"].asString(),
-        name = node["name"].asString(),
-        email = node["email"].asString(),
-        status = Status.entries.firstOrNull { it.name == node["status"].asString() } ?: Status.OFFLINE,
-        interest = node["interest"].asString(),
-        department = node["department"].asString(),
-        room = node["room"].asString(),
-        profilePicture = if (node["profilePicture"].isNull) null else node["profilePicture"].asString(),
+    // Extension function: converts a raw Neo4j Node into our User model.
+    // Defined as an extension because the conversion logic builds on top of Node's basic API,
+    // which is exactly the use case described in Kotlin's style guide for extension functions.
+    private fun Node.toUser(friendIds: List<String> = emptyList()): User = User(
+        id = this["id"].asString(),
+        name = this["name"].asString(),
+        email = this["email"].asString(),
+        status = Status.entries.firstOrNull { status -> status.name == this["status"].asString() } ?: Status.OFFLINE,
+        interest = this["interest"].asString(),
+        department = this["department"].asString(),
+        room = this["room"].asString(),
+        profilePicture = if (this["profilePicture"].isNull) null else this["profilePicture"].asString(),
         friends = friendIds
     )
 
@@ -67,77 +72,87 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
 
     override fun getById(id: String): User? {
         driver.session().use { session ->
-            val result = session.run(
-                """MATCH (u:User {id: ${'$'}id})
-                   OPTIONAL MATCH (u)-[:FRIENDS_WITH]->(f:User)
-                   RETURN u, collect(f.id) AS friendIds""",
-                parameters("id", id)
+            val queryResult = session.run(
+                """MATCH (user:User {id: ${'$'}userId})
+                   OPTIONAL MATCH (user)-[:FRIENDS_WITH]->(friend:User)
+                   RETURN user, collect(friend.id) AS friendIds""",
+                parameters("userId", id)
             )
-            val records = result.list()
-            if (records.isEmpty()) return null
-            val record = records[0]
-            return nodeToUser(record["u"].asNode(), record["friendIds"].asList { it.asString() })
+            val matchedRecords = queryResult.list()
+            if (matchedRecords.isEmpty()) {
+                return null
+            }
+
+            val firstRecord = matchedRecords[0]
+            val userNode = firstRecord["user"].asNode()
+            val friendIds = firstRecord["friendIds"].asList { it.asString() }
+            return userNode.toUser(friendIds)
         }
     }
 
     override fun delete(id: String) {
         driver.session().use { session ->
             session.run(
-                "MATCH (u:User {id: ${'$'}id}) DETACH DELETE u",
-                parameters("id", id)
+                "MATCH (user:User {id: \$userId}) DETACH DELETE user",
+                parameters("userId", id)
             )
         }
     }
 
     override fun updateProperty(id: String, property: UserExposedProperty, value: Any?) {
-        val key = property.toNeo4jKey()
-        val neo4jValue = if (property == UserExposedProperty.STATUS) {
+        val neo4jPropertyKey = property.toNeo4jPropertyKey()
+        val storedValue = if (property == UserExposedProperty.STATUS) {
             requireNotNull(value) { "STATUS value cannot be null" }
             (value as Status).name
-        } else value
+        } else {
+            value
+        }
         driver.session().use { session ->
             session.run(
-                "MATCH (u:User {id: \$id}) SET u.$key = \$value",
-                parameters("id", id, "value", neo4jValue)
+                "MATCH (user:User {id: \$userId}) SET user.$neo4jPropertyKey = \$storedValue",
+                parameters("userId", id, "storedValue", storedValue)
             )
         }
     }
 
     override fun getProperty(id: String, property: UserExposedProperty): Any? {
-        val key = property.toNeo4jKey()
+        val neo4jPropertyKey = property.toNeo4jPropertyKey()
         return driver.session().use { session ->
-            val result = session.run(
-                "MATCH (u:User {id: \$id}) RETURN u.$key AS value",
-                parameters("id", id)
+            val queryResult = session.run(
+                "MATCH (user:User {id: \$userId}) RETURN user.$neo4jPropertyKey AS propertyValue",
+                parameters("userId", id)
             )
-            val records = result.list()
-            if (records.isEmpty()) return@use null
-            val raw = records[0]["value"]
-            if (raw.isNull) return@use null
-            if (property == UserExposedProperty.STATUS)
-                Status.entries.firstOrNull { it.name == raw.asString() } ?: Status.OFFLINE
-            else
-                raw.asObject()
+            val matchedRecords = queryResult.list()
+            if (matchedRecords.isEmpty()) { return@use null }
+
+            val rawPropertyValue = matchedRecords[0]["propertyValue"]
+            if (rawPropertyValue.isNull) { return@use null }
+
+            if (property == UserExposedProperty.STATUS) {
+                Status.entries.firstOrNull { status -> status.name == rawPropertyValue.asString() } ?: Status.OFFLINE
+            } else {
+                rawPropertyValue.asObject()
+            }
         }
     }
 
     override fun sendFriendRequest(fromId: String, toId: String) {
         driver.session().use { session ->
             session.run(
-                """MATCH (from:User {id: ${'$'}fromId}), (to:User {id: ${'$'}toId})
-                   OPTIONAL MATCH (to)-[reverse:SENT_REQUEST]->(from)
-                   WITH from, to, reverse, reverse IS NOT NULL AS isMutual
-                   CALL (from, to, reverse, isMutual) {
-                     WITH from, to, reverse WHERE isMutual
-                     DELETE reverse
-                     MERGE (from)-[:FRIENDS_WITH]->(to)
-                     MERGE (to)-[:FRIENDS_WITH]->(from)
+                """MATCH (sender:User {id: ${'$'}senderId}), (receiver:User {id: ${'$'}receiverId})
+                   OPTIONAL MATCH (receiver)-[existingRequest:SENT_REQUEST]->(sender)
+                   WITH sender, receiver, existingRequest, existingRequest IS NOT NULL AS isMutualRequest
+                   CALL (sender, receiver, existingRequest, isMutualRequest) {
+                     WITH sender, receiver, existingRequest WHERE isMutualRequest
+                     DELETE existingRequest
+                     MERGE (sender)-[:FRIENDS_WITH]->(receiver)
+                     MERGE (receiver)-[:FRIENDS_WITH]->(sender)
                    }
-                   CALL (from, to, isMutual) {
-                     WITH from, to WHERE NOT isMutual
-                     MERGE (from)-[:SENT_REQUEST]->(to)
+                   CALL (sender, receiver, isMutualRequest) {
+                     WITH sender, receiver WHERE NOT isMutualRequest
+                     MERGE (sender)-[:SENT_REQUEST]->(receiver)
                    }""",
-                parameters("fromId", fromId, "toId", toId)
+                parameters("senderId", fromId, "receiverId", toId)
             )
         }
     }
@@ -145,25 +160,25 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
     override fun getPendingFriendRequests(userId: String): List<FriendRequest> {
         return driver.session().use { session ->
             session.run(
-                """MATCH (from:User)-[:SENT_REQUEST]->(to:User {id: ${'$'}userId})
-                   RETURN from.id AS fromId, to.id AS toId""",
+                """MATCH (requester:User)-[:SENT_REQUEST]->(recipient:User {id: ${'$'}userId})
+                   RETURN requester.id AS requesterId, recipient.id AS recipientId""",
                 parameters("userId", userId)
             ).list { record ->
-                FriendRequest(record["fromId"].asString(), record["toId"].asString())
+                FriendRequest(record["requesterId"].asString(), record["recipientId"].asString())
             }
         }
     }
 
     override fun getFriends(userId: String): List<User> {
         driver.session().use { session ->
-            val result = session.run(
-                """MATCH (u:User {id: ${'$'}id})-[:FRIENDS_WITH]->(f:User)
-                   OPTIONAL MATCH (f)-[:FRIENDS_WITH]->(ff:User)
-                   RETURN f, collect(ff.id) AS friendIds""",
-                parameters("id", userId)
+            val queryResult = session.run(
+                """MATCH (user:User {id: ${'$'}userId})-[:FRIENDS_WITH]->(friend:User)
+                   OPTIONAL MATCH (friend)-[:FRIENDS_WITH]->(friendOfFriend:User)
+                   RETURN friend, collect(friendOfFriend.id) AS friendOfFriendIds""",
+                parameters("userId", userId)
             )
-            return result.list { record ->
-                nodeToUser(record["f"].asNode(), record["friendIds"].asList { it.asString() })
+            return queryResult.list { record ->
+                record["friend"].asNode().toUser(record["friendOfFriendIds"].asList { it.asString() })
             }
         }
     }
@@ -171,9 +186,9 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
     override fun removeFriend(userId: String, friendId: String) {
         driver.session().use { session ->
             session.run(
-                """MATCH (a:User {id: ${'$'}userId})-[r1:FRIENDS_WITH]->(b:User {id: ${'$'}friendId})
-                   OPTIONAL MATCH (b)-[r2:FRIENDS_WITH]->(a)
-                   DELETE r1, r2""",
+                """MATCH (user:User {id: ${'$'}userId})-[userToFriend:FRIENDS_WITH]->(friend:User {id: ${'$'}friendId})
+                   OPTIONAL MATCH (friend)-[friendToUser:FRIENDS_WITH]->(user)
+                   DELETE userToFriend, friendToUser""",
                 parameters("userId", userId, "friendId", friendId)
             )
         }
@@ -182,17 +197,17 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
     override fun getFriendsOfFriends(userId: String): List<User> {
         driver.session().use { session ->
             val queryResult = session.run(
-                """MATCH (targetUser:User {id: ${'$'}id})-[:FRIENDS_WITH]->(directFriend)-[:FRIENDS_WITH]->(friendOfFriend)
+                """MATCH (targetUser:User {id: ${'$'}userId})-[:FRIENDS_WITH]->(directFriend)-[:FRIENDS_WITH]->(friendOfFriend)
                    WHERE NOT (targetUser)-[:FRIENDS_WITH]->(friendOfFriend) AND friendOfFriend <> targetUser
-                   WITH friendOfFriend, count(directFriend) AS mutualFriendCount
+                   WITH friendOfFriend, count(directFriend) AS sharedFriendCount
                    OPTIONAL MATCH (friendOfFriend)-[:FRIENDS_WITH]->(friendOfFriendContact:User)
-                   WITH friendOfFriend, mutualFriendCount, collect(friendOfFriendContact.id) AS friendOfFriendContactIds
-                   ORDER BY mutualFriendCount DESC
+                   WITH friendOfFriend, sharedFriendCount, collect(friendOfFriendContact.id) AS friendOfFriendContactIds
+                   ORDER BY sharedFriendCount DESC
                    RETURN friendOfFriend, friendOfFriendContactIds""",
-                parameters("id", userId)
+                parameters("userId", userId)
             )
             return queryResult.list { record ->
-                nodeToUser(record["friendOfFriend"].asNode(), record["friendOfFriendContactIds"].asList { it.asString() })
+                record["friendOfFriend"].asNode().toUser(record["friendOfFriendContactIds"].asList { it.asString() })
             }
         }
     }

@@ -8,14 +8,13 @@ import repository.UserRepository
 import java.util.UUID
 
 class UserService(private val repository: UserRepository) {
-
     fun createUser(
         name: String,
         email: String,
         status: Status,
         interest: String,
         department: String,
-        room: String
+        room: String //ToDo: add profile picture optional arg
     ): User {
         val user = User(
             id = UUID.randomUUID().toString(),
