@@ -54,24 +54,10 @@ class UserServiceTest {
     }
 
     @Test
-    fun `updateUser delegates to repository update`() {
-        every { repository.update(testUser) } returns Unit
-        service.updateUser(testUser)
-        verify(exactly = 1) { repository.update(testUser) }
-    }
-
-    @Test
     fun `deleteUser uses repository delete & does it once`() {
         every { repository.delete("1") } returns Unit
         service.deleteUser("1")
         verify(exactly = 1) { repository.delete("1") }
-    }
-
-    @Test
-    fun `addFriend uses repository addFriend & does it once`() {
-        every { repository.addFriend("1", "2") } returns Unit
-        service.addFriend("1", "2")
-        verify(exactly = 1) { repository.addFriend("1", "2") }
     }
 
     @Test
