@@ -2,6 +2,7 @@ package repository
 
 import model.Status
 import model.User
+import model.UserExposedProperty
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -71,5 +72,50 @@ class Neo4jUserRepositoryIT {
         val u = user("1").copy(profilePicture = "https://example.com/pic.jpg")
         repository.create(u)
         assertEquals("https://example.com/pic.jpg", repository.getById("1")!!.profilePicture)
+    }
+
+    @Test
+    fun `updateProperty changes name`() {
+        repository.create(user("1", "Alice"))
+        repository.updateProperty("1", UserExposedProperty.NAME, "Alice Updated")
+        assertEquals("Alice Updated", repository.getById("1")!!.name)
+    }
+
+    @Test
+    fun `updateProperty changes status`() {
+        repository.create(user("1", "Alice"))
+        repository.updateProperty("1", UserExposedProperty.STATUS, Status.BUSY)
+        assertEquals(Status.BUSY, repository.getById("1")!!.status)
+    }
+
+    @Test
+    fun `updateProperty sets profilePicture to null`() {
+        val u = user("1").copy(profilePicture = "https://example.com/pic.jpg")
+        repository.create(u)
+        repository.updateProperty("1", UserExposedProperty.PROFILE_PICTURE, null)
+        assertNull(repository.getById("1")!!.profilePicture)
+    }
+
+    @Test
+    fun `getProperty returns name`() {
+        repository.create(user("1", "Alice"))
+        assertEquals("Alice", repository.getProperty("1", UserExposedProperty.NAME))
+    }
+
+    @Test
+    fun `getProperty returns status as Status enum`() {
+        repository.create(user("1", "Alice"))
+        assertEquals(Status.ONLINE, repository.getProperty("1", UserExposedProperty.STATUS))
+    }
+
+    @Test
+    fun `getProperty returns null profilePicture`() {
+        repository.create(user("1"))
+        assertNull(repository.getProperty("1", UserExposedProperty.PROFILE_PICTURE))
+    }
+
+    @Test
+    fun `getProperty returns null for unknown user`() {
+        assertNull(repository.getProperty("missing", UserExposedProperty.NAME))
     }
 }

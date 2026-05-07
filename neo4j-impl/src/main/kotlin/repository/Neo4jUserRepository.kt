@@ -90,11 +90,31 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
     }
 
     override fun updateProperty(id: String, property: UserExposedProperty, value: Any?) {
-        TODO("not yet implemented")
+        val key = property.toNeo4jKey()
+        val neo4jValue = if (property == UserExposedProperty.STATUS) (value as Status).name else value
+        driver.session().use { session ->
+            session.run(
+                "MATCH (u:User {id: \$id}) SET u.$key = \$value",
+                parameters("id", id, "value", neo4jValue)
+            )
+        }
     }
 
     override fun getProperty(id: String, property: UserExposedProperty): Any? {
-        TODO("not yet implemented")
+        val key = property.toNeo4jKey()
+        return driver.session().use { session ->
+            val result = session.run(
+                "MATCH (u:User {id: \$id}) RETURN u.$key AS value",
+                parameters("id", id)
+            )
+            if (!result.hasNext()) return@use null
+            val raw = result.single()["value"]
+            if (raw.isNull) return@use null
+            if (property == UserExposedProperty.STATUS)
+                Status.entries.firstOrNull { it.name == raw.asString() } ?: Status.OFFLINE
+            else
+                raw.asString()
+        }
     }
 
     override fun sendFriendRequest(fromId: String, toId: String) {
