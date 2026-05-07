@@ -160,7 +160,7 @@ RETURN from.id AS fromId, to.id AS toId
 
 ### `updateProperty` / `getProperty`
 
-Cypher uses a dynamic property key via `SET n[$property] = $value` / `RETURN n[$property]`, where `property` is the snake_case Neo4j field name mapped from `UserExposedProperty`.
+Cypher uses a dynamic property key via `SET n[$property] = $value` / `RETURN n[$property]`, where `property` is the camelCase Neo4j field name mapped from `UserExposedProperty` (e.g. `PROFILE_PICTURE` → `"profilePicture"`).
 
 ## UML Diagram
 
