@@ -91,7 +91,10 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
 
     override fun updateProperty(id: String, property: UserExposedProperty, value: Any?) {
         val key = property.toNeo4jKey()
-        val neo4jValue = if (property == UserExposedProperty.STATUS) (value as Status).name else value
+        val neo4jValue = if (property == UserExposedProperty.STATUS) {
+            requireNotNull(value) { "STATUS value cannot be null" }
+            (value as Status).name
+        } else value
         driver.session().use { session ->
             session.run(
                 "MATCH (u:User {id: \$id}) SET u.$key = \$value",
@@ -113,7 +116,7 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
             if (property == UserExposedProperty.STATUS)
                 Status.entries.firstOrNull { it.name == raw.asString() } ?: Status.OFFLINE
             else
-                raw.asString()
+                raw.asObject()
         }
     }
 
