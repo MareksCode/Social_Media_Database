@@ -56,12 +56,13 @@ Generates UUID internally. `profilePicture` defaults to null; set after creation
 ### Property Access
 
 ```kotlin
-fun change(userId: String, property: UserExposedProperty, newValue: Any)
+fun change(userId: String, property: UserExposedProperty, newValue: Any?)
 fun get(userId: String, property: UserExposedProperty): Any?
 ```
 
 - Property name validated at compile time via enum.
 - `newValue` type checked at runtime against expected type for the property.
+- `newValue` is `Any?` to allow clearing nullable fields (e.g. `PROFILE_PICTURE → null`).
 - Throws `IllegalArgumentException` if type mismatch.
 
 ### Friend Requests
@@ -102,7 +103,7 @@ fun removeFriend(userId: String, friendId: String)
 fun create(user: User)
 
 // Replaces update(user: User)
-fun updateProperty(id: String, property: UserExposedProperty, value: Any)
+fun updateProperty(id: String, property: UserExposedProperty, value: Any?)
 fun getProperty(id: String, property: UserExposedProperty): Any?
 
 // Replaces addFriend
@@ -171,7 +172,7 @@ classDiagram
         +createUser(name, email, status, interest, department, room) User
         +getUser(id) User?
         +deleteUser(id)
-        +change(userId, property UserExposedProperty, newValue Any)
+        +change(userId, property UserExposedProperty, newValue Any?)
         +get(userId, property UserExposedProperty) Any?
         +sendFriendRequest(fromId, toId)
         +getPendingFriendRequests(userId) List~FriendRequest~
@@ -185,7 +186,7 @@ classDiagram
         +create(user User)
         +getById(id) User?
         +delete(id)
-        +updateProperty(id, property UserExposedProperty, value Any)
+        +updateProperty(id, property UserExposedProperty, value Any?)
         +getProperty(id, property UserExposedProperty) Any?
         +sendFriendRequest(fromId, toId)
         +getPendingFriendRequests(userId) List~FriendRequest~
@@ -199,7 +200,7 @@ classDiagram
         +create(user User)
         +getById(id) User?
         +delete(id)
-        +updateProperty(id, property UserExposedProperty, value Any)
+        +updateProperty(id, property UserExposedProperty, value Any?)
         +getProperty(id, property UserExposedProperty) Any?
         +sendFriendRequest(fromId, toId)
         +getPendingFriendRequests(userId) List~FriendRequest~
