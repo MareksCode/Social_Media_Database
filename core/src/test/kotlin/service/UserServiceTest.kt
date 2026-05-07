@@ -8,7 +8,9 @@ import model.Status
 import model.User
 import model.UserExposedProperty
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import repository.UserRepository
@@ -33,7 +35,7 @@ class UserServiceTest {
     @Test
     fun `createUser returns user with generated id`() {
         val result = service.createUser("testUser", "testuser@example.com", Status.ONLINE, "clash royale", "IT", "007")
-        assert(result.id.isNotBlank())
+        assertTrue(result.id.isNotBlank())
         assertEquals("testUser", result.name)
     }
 
@@ -47,7 +49,7 @@ class UserServiceTest {
     fun `createUser generates unique ids`() {
         val a = service.createUser("A", "a@example.com", Status.ONLINE, "chess", "IT", "1")
         val b = service.createUser("B", "b@example.com", Status.ONLINE, "chess", "IT", "2")
-        assert(a.id != b.id)
+        assertNotEquals(a.id, b.id)
     }
 
     @Test
@@ -94,6 +96,12 @@ class UserServiceTest {
     fun `change allows null for PROFILE_PICTURE`() {
         service.change("1", UserExposedProperty.PROFILE_PICTURE, null)
         verify { repository.updateProperty("1", UserExposedProperty.PROFILE_PICTURE, null) }
+    }
+
+    @Test
+    fun `change delegates non-null String to PROFILE_PICTURE`() {
+        service.change("1", UserExposedProperty.PROFILE_PICTURE, "https://example.com/pic.jpg")
+        verify { repository.updateProperty("1", UserExposedProperty.PROFILE_PICTURE, "https://example.com/pic.jpg") }
     }
 
     @Test

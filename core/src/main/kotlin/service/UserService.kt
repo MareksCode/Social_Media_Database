@@ -7,7 +7,7 @@ import model.UserExposedProperty
 import repository.UserRepository
 import java.util.UUID
 
-class UserService(val repository: UserRepository) {
+class UserService(private val repository: UserRepository) {
 
     fun createUser(
         name: String,
