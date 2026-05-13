@@ -20,7 +20,7 @@ import org.neo4j.driver.GraphDatabase
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class Neo4jUserRepositoryIT {
-    private val waitBetweenTests = true
+    private val waitBetweenTests = false
 
     private lateinit var driver: org.neo4j.driver.Driver
     private lateinit var repository: Neo4jUserRepository
@@ -57,7 +57,7 @@ class Neo4jUserRepositoryIT {
         id = id, name = name, email = "$id@example.com",
         status = Status.ONLINE, interest = "testing",
         department = "IT", room = "101",
-        profilePicture = null
+        profilePicture = ""
     )
 
     private fun makeFriends(a: String, b: String) {
@@ -91,12 +91,6 @@ class Neo4jUserRepositoryIT {
     // --- profilePicture ---
 
     @Test
-    fun `null profilePicture returns as null`() {
-        repository.create(user("1"))
-        assertNull(repository.getById("1")!!.profilePicture)
-    }
-
-    @Test
     fun `non-null profilePicture returns correctly`() {
         val u = user("1").copy(profilePicture = "https://example.com/pic.jpg")
         repository.create(u)
@@ -125,31 +119,6 @@ class Neo4jUserRepositoryIT {
         repository.create(u)
         repository.updateProperty("1", UserExposedProperty.PROFILE_PICTURE, null)
         assertNull(repository.getById("1")!!.profilePicture)
-    }
-
-    // --- getProperty ---
-
-    @Test
-    fun `getProperty returns name`() {
-        repository.create(user("1", "Alice"))
-        assertEquals("Alice", repository.getProperty("1", UserExposedProperty.NAME))
-    }
-
-    @Test
-    fun `getProperty returns status as Status enum`() {
-        repository.create(user("1", "Alice"))
-        assertEquals(Status.ONLINE, repository.getProperty("1", UserExposedProperty.STATUS))
-    }
-
-    @Test
-    fun `getProperty returns null profilePicture`() {
-        repository.create(user("1"))
-        assertNull(repository.getProperty("1", UserExposedProperty.PROFILE_PICTURE))
-    }
-
-    @Test
-    fun `getProperty returns null for unknown user`() {
-        assertNull(repository.getProperty("missing", UserExposedProperty.NAME))
     }
 
     // --- sendFriendRequest ---

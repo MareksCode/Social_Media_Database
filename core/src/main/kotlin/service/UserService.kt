@@ -8,14 +8,7 @@ import repository.UserRepository
 import java.util.UUID
 
 class UserService(private val repository: UserRepository) {
-    fun createUser(
-        name: String,
-        email: String,
-        status: Status,
-        interest: String,
-        department: String,
-        room: String //ToDo: add profile picture optional arg
-    ): User {
+    fun createUser(name: String, email: String, status: Status, interest: String, department: String, room: String): User {
         val user = User(
             id = UUID.randomUUID().toString(),
             name = name,
@@ -34,30 +27,18 @@ class UserService(private val repository: UserRepository) {
 
     fun deleteUser(id: String) = repository.delete(id)
 
-    fun change(userId: String, property: UserExposedProperty, newValue: Any?) {
-        if (newValue == null) {
-            require(property == UserExposedProperty.PROFILE_PICTURE) {
-                "$property cannot be null"
-            }
-        } else {
-            val expectedType: Class<*> = when (property) {
-                UserExposedProperty.NAME,
-                UserExposedProperty.EMAIL,
-                UserExposedProperty.INTEREST,
-                UserExposedProperty.DEPARTMENT,
-                UserExposedProperty.ROOM,
-                UserExposedProperty.PROFILE_PICTURE -> String::class.java
-                UserExposedProperty.STATUS -> Status::class.java
-            }
-            require(expectedType.isInstance(newValue)) {
-                "$property expects ${expectedType.simpleName}, got ${newValue::class.simpleName}"
-            }
+    fun updateUser(userId: String, property: UserExposedProperty, value: Any?) {
+        when (property) {
+            UserExposedProperty.NAME, UserExposedProperty.EMAIL,
+            UserExposedProperty.INTEREST, UserExposedProperty.DEPARTMENT,
+            UserExposedProperty.ROOM -> require(value is String) { "Expected non-null String for $property" }
+            UserExposedProperty.STATUS -> require(value is Status) { "Expected Status for $property" }
+            UserExposedProperty.PROFILE_PICTURE -> require(value == null || value is String) { "Expected String? for PROFILE_PICTURE" }
         }
-        repository.updateProperty(userId, property, newValue)
+        repository.updateProperty(userId, property, value)
     }
 
-    fun get(userId: String, property: UserExposedProperty): Any? =
-        repository.getProperty(userId, property)
+    fun get(userId: String, property: UserExposedProperty): Any? = repository.getProperty(userId, property)
 
     fun sendFriendRequest(fromId: String, toId: String) {
         require(fromId != toId) { "Cannot send friend request to yourself" }

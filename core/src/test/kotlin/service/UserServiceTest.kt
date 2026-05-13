@@ -71,42 +71,42 @@ class UserServiceTest {
     }
 
     @Test
-    fun `change delegates String property to repository`() {
-        service.change("1", UserExposedProperty.NAME, "Bob")
+    fun `updateUser delegates String property to repository`() {
+        service.updateUser("1", UserExposedProperty.NAME, "Bob")
         verify { repository.updateProperty("1", UserExposedProperty.NAME, "Bob") }
     }
 
     @Test
-    fun `change delegates Status property to repository`() {
-        service.change("1", UserExposedProperty.STATUS, Status.BUSY)
+    fun `updateUser delegates Status property to repository`() {
+        service.updateUser("1", UserExposedProperty.STATUS, Status.BUSY)
         verify { repository.updateProperty("1", UserExposedProperty.STATUS, Status.BUSY) }
     }
 
     @Test
-    fun `change throws IllegalArgumentException on type mismatch for NAME`() {
-        assertThrows<IllegalArgumentException> { service.change("1", UserExposedProperty.NAME, 42) }
+    fun `updateUser throws IllegalArgumentException on type mismatch for NAME`() {
+        assertThrows<IllegalArgumentException> { service.updateUser("1", UserExposedProperty.NAME, 42) }
     }
 
     @Test
-    fun `change throws IllegalArgumentException on type mismatch for STATUS`() {
-        assertThrows<IllegalArgumentException> { service.change("1", UserExposedProperty.STATUS, "ONLINE") }
+    fun `updateUser throws IllegalArgumentException on type mismatch for STATUS`() {
+        assertThrows<IllegalArgumentException> { service.updateUser("1", UserExposedProperty.STATUS, "ONLINE") }
     }
 
     @Test
-    fun `change allows null for PROFILE_PICTURE`() {
-        service.change("1", UserExposedProperty.PROFILE_PICTURE, null)
+    fun `updateUser allows null for PROFILE_PICTURE`() {
+        service.updateUser("1", UserExposedProperty.PROFILE_PICTURE, null)
         verify { repository.updateProperty("1", UserExposedProperty.PROFILE_PICTURE, null) }
     }
 
     @Test
-    fun `change delegates non-null String to PROFILE_PICTURE`() {
-        service.change("1", UserExposedProperty.PROFILE_PICTURE, "https://example.com/pic.jpg")
+    fun `updateUser delegates non-null String to PROFILE_PICTURE`() {
+        service.updateUser("1", UserExposedProperty.PROFILE_PICTURE, "https://example.com/pic.jpg")
         verify { repository.updateProperty("1", UserExposedProperty.PROFILE_PICTURE, "https://example.com/pic.jpg") }
     }
 
     @Test
-    fun `change throws IllegalArgumentException when null passed for non-nullable property`() {
-        assertThrows<IllegalArgumentException> { service.change("1", UserExposedProperty.NAME, null) }
+    fun `updateUser throws IllegalArgumentException when null passed for non-nullable property`() {
+        assertThrows<IllegalArgumentException> { service.updateUser("1", UserExposedProperty.NAME, null) }
     }
 
     @Test

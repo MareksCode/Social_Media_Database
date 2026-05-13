@@ -16,18 +16,6 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
             Neo4jUserRepository(GraphDatabase.driver(uri, AuthTokens.basic(username, password)))
     }
 
-    //maps enum to corresponding neo4j properties
-    private fun UserExposedProperty.toNeo4jPropertyKey(): String = when (this) {
-        UserExposedProperty.NAME -> "name"
-        UserExposedProperty.EMAIL -> "email"
-        UserExposedProperty.STATUS -> "status"
-        UserExposedProperty.INTEREST -> "interest"
-        UserExposedProperty.DEPARTMENT -> "department"
-        UserExposedProperty.ROOM -> "room"
-        UserExposedProperty.PROFILE_PICTURE -> "profilePicture"
-    }
-
-    //maps node to user model
     private fun Node.toUser(): User = User(
         id = this["id"].asString(),
         name = this["name"].asString(),
@@ -36,7 +24,7 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
         interest = this["interest"].asString(),
         department = this["department"].asString(),
         room = this["room"].asString(),
-        profilePicture = if (this["profilePicture"].isNull) null else this["profilePicture"].asString()
+        profilePicture = this["profilePicture"].let { if (it.isNull) null else it.asString() }
     )
 
     override fun create(user: User) {
@@ -88,38 +76,37 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
     }
 
     override fun updateProperty(id: String, property: UserExposedProperty, value: Any?) {
-        val neo4jPropertyKey = property.toNeo4jPropertyKey()
-        val storedValue = if (property == UserExposedProperty.STATUS) {
-            requireNotNull(value) { "STATUS value cannot be null" }
-            (value as Status).name
-        } else {
-            value
+        val (fieldName, dbValue) = when (property) {
+            UserExposedProperty.NAME -> "name" to value
+            UserExposedProperty.EMAIL -> "email" to value
+            UserExposedProperty.STATUS -> "status" to (value as Status).name
+            UserExposedProperty.INTEREST -> "interest" to value
+            UserExposedProperty.DEPARTMENT -> "department" to value
+            UserExposedProperty.ROOM -> "room" to value
+            UserExposedProperty.PROFILE_PICTURE -> "profilePicture" to value
         }
         driver.session().use { session ->
             session.run(
-                "MATCH (user:User {id: \$userId}) SET user.$neo4jPropertyKey = \$storedValue",
-                parameters("userId", id, "storedValue", storedValue)
+                "MATCH (user:User {id: \$userId}) SET user.$fieldName = \$value",
+                parameters("userId", id, "value", dbValue)
             )
         }
     }
 
     override fun getProperty(id: String, property: UserExposedProperty): Any? {
-        val neo4jPropertyKey = property.toNeo4jPropertyKey()
-        return driver.session().use { session ->
-            val queryResult = session.run(
-                "MATCH (user:User {id: \$userId}) RETURN user.$neo4jPropertyKey AS propertyValue",
-                parameters("userId", id)
-            )
-            val matchedRecords = queryResult.list()
-            if (matchedRecords.isEmpty()) { return@use null }
-
-            val rawPropertyValue = matchedRecords[0]["propertyValue"]
-            if (rawPropertyValue.isNull) { return@use null }
-
-            if (property == UserExposedProperty.STATUS) {
-                Status.entries.firstOrNull { status -> status.name == rawPropertyValue.asString() } ?: Status.OFFLINE
-            } else {
-                rawPropertyValue.asObject()
+        driver.session().use { session ->
+            val result = session.run("MATCH (user:User {id: \$userId}) RETURN user", parameters("userId", id))
+            val records = result.list()
+            if (records.isEmpty()) return null
+            val node = records[0]["user"].asNode()
+            return when (property) {
+                UserExposedProperty.NAME -> node["name"].asString(null)
+                UserExposedProperty.EMAIL -> node["email"].asString(null)
+                UserExposedProperty.STATUS -> Status.entries.firstOrNull { it.name == node["status"].asString() }
+                UserExposedProperty.INTEREST -> node["interest"].asString(null)
+                UserExposedProperty.DEPARTMENT -> node["department"].asString(null)
+                UserExposedProperty.ROOM -> node["room"].asString(null)
+                UserExposedProperty.PROFILE_PICTURE -> node["profilePicture"].let { if (it.isNull) null else it.asString() }
             }
         }
     }
