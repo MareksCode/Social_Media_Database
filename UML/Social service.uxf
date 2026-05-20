@@ -12,8 +12,8 @@
     <panel_attributes>&lt;&lt;Entity&gt;&gt;
 FriendRequest
 --
-fromId : string 
-toId : string 
+fromId : String
+toId : String
 
 -.
 valign=top
@@ -49,14 +49,14 @@ valign=top
     <panel_attributes>&lt;&lt;Entity&gt;&gt;
 User
 --
-id: String,
-name: String,
-email: String,
-status: Status,
-interest: String,
-department: String,
-room: String,
-profilePicture: String?
+id: String
+name: String
+email: String
+status: Status
+interest: String
+department: String
+room: String
+profilePicture: String
 
 -.
 valign=top
@@ -69,12 +69,18 @@ valign=top
       <x>602</x>
       <y>238</y>
       <w>385</w>
-      <h>77</h>
+      <h>98</h>
     </coordinates>
-    <panel_attributes>&lt;&lt;Enum&gt;&gt;
+    <panel_attributes>&lt;&lt;Data Class&gt;&gt;
 UserExposedProperty
 --
-NAME, EMAIL, STATUS, INTEREST, DEPARTMENT, ROOM, PROFILE_PICTURE
+name: String? = null
+email: String? = null
+status: Status? = null
+interest: String? = null
+department: String? = null
+room: String? = null
+profilePicture: String? = null
 
 -.
 valign=top
@@ -121,8 +127,7 @@ valign=top
 create(user: User)
 getById(id: String): User?
 delete(id: String)
-updateProperty(id: String, property: UserExposedProperty, value: Any?)
-getProperty(id: String, property: UserExposedProperty): Any?
+updateUser(id: String, update: UserExposedProperty)
 sendFriendRequest(fromId: String, toId: String)
 getPendingFriendRequests(userId: String): List&lt;FriendRequest&gt;
 getFriends(userId: String): List&lt;User&gt;
@@ -149,7 +154,7 @@ getFriendsOfFriends(userId: String): List&lt;User&gt;</panel_attributes>
       <w>546</w>
       <h>329</h>
     </coordinates>
-    <panel_attributes>Usersrevice</panel_attributes>
+    <panel_attributes>UserService</panel_attributes>
     <additional_attributes/>
   </element>
   <element>
@@ -158,7 +163,7 @@ getFriendsOfFriends(userId: String): List&lt;User&gt;</panel_attributes>
       <x>1211</x>
       <y>462</y>
       <w>490</w>
-      <h>182</h>
+      <h>196</h>
     </coordinates>
     <panel_attributes>UserService
 --
@@ -166,15 +171,15 @@ getFriendsOfFriends(userId: String): List&lt;User&gt;</panel_attributes>
 
 -.
 valign=top
-create(name : string, email : string, status : Status, interest : string, department : string, room : string) : User
-getUser (IdString : User) :  User? 
-deleteUser(IdString : User) 
-change (UserId : string, property : UserExposedProperty, NewValue : any)
-Get (UserId : string , property : UserExposedProperty ) : any?
-SendFriendRequest(fromId : String, toId: string) 
-getFriends(userId : string) : List&lt;User&gt;
-removeFriend(userId : string, friendId: string)
-getPendingFriendRequest (UserId : string) List&lt;FriendRequest&gt;</panel_attributes>
+createUser(name: String, email: String, status: Status, interest: String, department: String, room: String): User
+getUser(id: String): User?
+deleteUser(id: String)
+updateUser(userId: String, update: UserExposedProperty)
+sendFriendRequest(fromId: String, toId: String)
+getPendingFriendRequests(userId: String): List&lt;FriendRequest&gt;
+getFriends(userId: String): List&lt;User&gt;
+suggestFriends(userId: String): List&lt;User&gt;
+removeFriend(userId: String, friendId: String)</panel_attributes>
     <additional_attributes/>
   </element>
   <element>
@@ -207,7 +212,7 @@ getPendingFriendRequest (UserId : string) List&lt;FriendRequest&gt;</panel_attri
       <w>140</w>
       <h>49</h>
     </coordinates>
-    <panel_attributes>Datebase</panel_attributes>
+    <panel_attributes>Neo4j Database</panel_attributes>
     <additional_attributes/>
   </element>
   <element>
@@ -224,13 +229,12 @@ getPendingFriendRequest (UserId : string) List&lt;FriendRequest&gt;</panel_attri
 
 -.
 valign=top
-fun create(user: User)
+create(user: User)
 getById(id: String): User?
 delete(id: String)
-updateProperty(id: String, property: UserExposedProperty, value: Any?)
-getProperty(id: String, property: UserExposedProperty): Any?
+updateUser(id: String, update: UserExposedProperty)
 sendFriendRequest(fromId: String, toId: String)
- getPendingFriendRequests(userId: String): List&lt;FriendRequest&gt;
+getPendingFriendRequests(userId: String): List&lt;FriendRequest&gt;
 getFriends(userId: String): List&lt;User&gt;
 removeFriend(userId: String, friendId: String)
 getFriendsOfFriends(userId: String): List&lt;User&gt;</panel_attributes>
