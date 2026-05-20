@@ -1,5 +1,11 @@
 package model
 
-enum class UserExposedProperty {
-    NAME, EMAIL, STATUS, INTEREST, DEPARTMENT, ROOM, PROFILE_PICTURE
-}
+data class UserExposedProperty(
+    val name: String? = null,
+    val email: String? = null,
+    val status: Status? = null,
+    val interest: String? = null,
+    val department: String? = null,
+    val room: String? = null,
+    val profilePicture: String? = null
+)

@@ -17,7 +17,7 @@ class UserService(private val repository: UserRepository) {
             interest = interest,
             department = department,
             room = room,
-            profilePicture = null
+            profilePicture = ""
         )
         repository.create(user)
         return user
@@ -27,18 +27,7 @@ class UserService(private val repository: UserRepository) {
 
     fun deleteUser(id: String) = repository.delete(id)
 
-    fun updateUser(userId: String, property: UserExposedProperty, value: Any?) {
-        when (property) {
-            UserExposedProperty.NAME, UserExposedProperty.EMAIL,
-            UserExposedProperty.INTEREST, UserExposedProperty.DEPARTMENT,
-            UserExposedProperty.ROOM -> require(value is String) { "Expected non-null String for $property" }
-            UserExposedProperty.STATUS -> require(value is Status) { "Expected Status for $property" }
-            UserExposedProperty.PROFILE_PICTURE -> require(value == null || value is String) { "Expected String? for PROFILE_PICTURE" }
-        }
-        repository.updateProperty(userId, property, value)
-    }
-
-    fun get(userId: String, property: UserExposedProperty): Any? = repository.getProperty(userId, property)
+    fun updateUser(userId: String, update: UserExposedProperty) = repository.updateUser(userId, update)
 
     fun sendFriendRequest(fromId: String, toId: String) {
         require(fromId != toId) { "Cannot send friend request to yourself" }

@@ -60,6 +60,7 @@ class Neo4jUserRepositoryIT {
         profilePicture = ""
     )
 
+
     private fun makeFriends(a: String, b: String) {
         repository.sendFriendRequest(a, b)
         repository.sendFriendRequest(b, a)
@@ -97,28 +98,46 @@ class Neo4jUserRepositoryIT {
         assertEquals("https://example.com/pic.jpg", repository.getById("1")!!.profilePicture)
     }
 
-    // --- updateProperty ---
+    // --- updateUser ---
 
     @Test
-    fun `updateProperty changes name`() {
+    fun `updateUser changes name`() {
         repository.create(user("1", "Alice"))
-        repository.updateProperty("1", UserExposedProperty.NAME, "Alice Updated")
+        repository.updateUser("1", UserExposedProperty(name = "Alice Updated"))
         assertEquals("Alice Updated", repository.getById("1")!!.name)
     }
 
     @Test
-    fun `updateProperty changes status`() {
+    fun `updateUser changes status`() {
         repository.create(user("1", "Alice"))
-        repository.updateProperty("1", UserExposedProperty.STATUS, Status.BUSY)
+        repository.updateUser("1", UserExposedProperty(status = Status.BUSY))
         assertEquals(Status.BUSY, repository.getById("1")!!.status)
     }
 
     @Test
-    fun `updateProperty sets profilePicture to null`() {
-        val u = user("1").copy(profilePicture = "https://example.com/pic.jpg")
+    fun `updateUser changes multiple fields`() {
+        repository.create(user("1", "Alice"))
+        repository.updateUser("1", UserExposedProperty(name = "Alice Updated", department = "HR"))
+        val updated = repository.getById("1")!!
+        assertEquals("Alice Updated", updated.name)
+        assertEquals("HR", updated.department)
+    }
+
+    @Test
+    fun `updateUser does not change unset fields`() {
+        repository.create(user("1", "Alice"))
+        repository.updateUser("1", UserExposedProperty(name = "Alice Updated"))
+        val updated = repository.getById("1")!!
+        assertEquals("1@example.com", updated.email)
+        assertEquals(Status.ONLINE, updated.status)
+    }
+
+    @Test
+    fun `updateUser with empty object changes nothing`() {
+        val u = user("1", "Alice")
         repository.create(u)
-        repository.updateProperty("1", UserExposedProperty.PROFILE_PICTURE, null)
-        assertNull(repository.getById("1")!!.profilePicture)
+        repository.updateUser("1", UserExposedProperty())
+        assertEquals(u, repository.getById("1"))
     }
 
     // --- sendFriendRequest ---

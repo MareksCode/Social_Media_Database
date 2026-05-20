@@ -8,5 +8,5 @@ data class User(
     val interest: String,
     val department: String,
     val room: String,
-    val profilePicture: String?
+    val profilePicture: String
 )

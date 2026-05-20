@@ -23,7 +23,7 @@ class UserServiceTest {
         id = "1", name = "testUser", email = "testuser@example.com",
         status = Status.ONLINE, interest = "clash royale",
         department = "IT", room = "007",
-        profilePicture = null
+        profilePicture = ""
     )
 
     @Test
@@ -40,9 +40,9 @@ class UserServiceTest {
     }
 
     @Test
-    fun `createUser sets profilePicture to null by default`() {
+    fun `createUser sets profilePicture to empty string by default`() {
         val result = service.createUser("testUser", "testuser@example.com", Status.ONLINE, "clash royale", "IT", "007")
-        assertNull(result.profilePicture)
+        assertEquals("", result.profilePicture)
     }
 
     @Test
@@ -71,48 +71,17 @@ class UserServiceTest {
     }
 
     @Test
-    fun `updateUser delegates String property to repository`() {
-        service.updateUser("1", UserExposedProperty.NAME, "Bob")
-        verify { repository.updateProperty("1", UserExposedProperty.NAME, "Bob") }
+    fun `updateUser delegates to repository`() {
+        val update = UserExposedProperty(name = "Bob")
+        service.updateUser("1", update)
+        verify { repository.updateUser("1", update) }
     }
 
     @Test
-    fun `updateUser delegates Status property to repository`() {
-        service.updateUser("1", UserExposedProperty.STATUS, Status.BUSY)
-        verify { repository.updateProperty("1", UserExposedProperty.STATUS, Status.BUSY) }
-    }
-
-    @Test
-    fun `updateUser throws IllegalArgumentException on type mismatch for NAME`() {
-        assertThrows<IllegalArgumentException> { service.updateUser("1", UserExposedProperty.NAME, 42) }
-    }
-
-    @Test
-    fun `updateUser throws IllegalArgumentException on type mismatch for STATUS`() {
-        assertThrows<IllegalArgumentException> { service.updateUser("1", UserExposedProperty.STATUS, "ONLINE") }
-    }
-
-    @Test
-    fun `updateUser allows null for PROFILE_PICTURE`() {
-        service.updateUser("1", UserExposedProperty.PROFILE_PICTURE, null)
-        verify { repository.updateProperty("1", UserExposedProperty.PROFILE_PICTURE, null) }
-    }
-
-    @Test
-    fun `updateUser delegates non-null String to PROFILE_PICTURE`() {
-        service.updateUser("1", UserExposedProperty.PROFILE_PICTURE, "https://example.com/pic.jpg")
-        verify { repository.updateProperty("1", UserExposedProperty.PROFILE_PICTURE, "https://example.com/pic.jpg") }
-    }
-
-    @Test
-    fun `updateUser throws IllegalArgumentException when null passed for non-nullable property`() {
-        assertThrows<IllegalArgumentException> { service.updateUser("1", UserExposedProperty.NAME, null) }
-    }
-
-    @Test
-    fun `get delegates to repository`() {
-        every { repository.getProperty("1", UserExposedProperty.NAME) } returns "Alice"
-        assertEquals("Alice", service.get("1", UserExposedProperty.NAME))
+    fun `updateUser with multiple fields delegates to repository`() {
+        val update = UserExposedProperty(name = "Bob", status = Status.BUSY)
+        service.updateUser("1", update)
+        verify { repository.updateUser("1", update) }
     }
 
     @Test

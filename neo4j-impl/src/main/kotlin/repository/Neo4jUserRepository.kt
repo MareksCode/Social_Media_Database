@@ -24,7 +24,7 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
         interest = this["interest"].asString(),
         department = this["department"].asString(),
         room = this["room"].asString(),
-        profilePicture = this["profilePicture"].let { if (it.isNull) null else it.asString() }
+        profilePicture = this["profilePicture"].asString("")
     )
 
     override fun create(user: User) {
@@ -75,39 +75,22 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
         }
     }
 
-    override fun updateProperty(id: String, property: UserExposedProperty, value: Any?) {
-        val (fieldName, dbValue) = when (property) {
-            UserExposedProperty.NAME -> "name" to value
-            UserExposedProperty.EMAIL -> "email" to value
-            UserExposedProperty.STATUS -> "status" to (value as Status).name
-            UserExposedProperty.INTEREST -> "interest" to value
-            UserExposedProperty.DEPARTMENT -> "department" to value
-            UserExposedProperty.ROOM -> "room" to value
-            UserExposedProperty.PROFILE_PICTURE -> "profilePicture" to value
+    override fun updateUser(id: String, update: UserExposedProperty) {
+        val props = buildMap<String, Any?> {
+            update.name?.let { put("name", it) }
+            update.email?.let { put("email", it) }
+            update.status?.let { put("status", it.name) }
+            update.interest?.let { put("interest", it) }
+            update.department?.let { put("department", it) }
+            update.room?.let { put("room", it) }
+            update.profilePicture?.let { put("profilePicture", it) }
         }
+        if (props.isEmpty()) return
         driver.session().use { session ->
             session.run(
-                "MATCH (user:User {id: \$userId}) SET user.$fieldName = \$value",
-                parameters("userId", id, "value", dbValue)
+                "MATCH (user:User {id: \$userId}) SET user += \$props",
+                parameters("userId", id, "props", props)
             )
-        }
-    }
-
-    override fun getProperty(id: String, property: UserExposedProperty): Any? {
-        driver.session().use { session ->
-            val result = session.run("MATCH (user:User {id: \$userId}) RETURN user", parameters("userId", id))
-            val records = result.list()
-            if (records.isEmpty()) return null
-            val node = records[0]["user"].asNode()
-            return when (property) {
-                UserExposedProperty.NAME -> node["name"].asString(null)
-                UserExposedProperty.EMAIL -> node["email"].asString(null)
-                UserExposedProperty.STATUS -> Status.entries.firstOrNull { it.name == node["status"].asString() }
-                UserExposedProperty.INTEREST -> node["interest"].asString(null)
-                UserExposedProperty.DEPARTMENT -> node["department"].asString(null)
-                UserExposedProperty.ROOM -> node["room"].asString(null)
-                UserExposedProperty.PROFILE_PICTURE -> node["profilePicture"].let { if (it.isNull) null else it.asString() }
-            }
         }
     }
 
