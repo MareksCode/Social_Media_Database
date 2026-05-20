@@ -1,0 +1,316 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<diagram program="umlet" version="15.1">
+  <zoom_level>7</zoom_level>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>623</x>
+      <y>77</y>
+      <w>126</w>
+      <h>77</h>
+    </coordinates>
+    <panel_attributes>&lt;&lt;Entity&gt;&gt;
+FriendRequest
+--
+fromId : string 
+toId : string 
+
+-.
+valign=top
+</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>798</x>
+      <y>77</y>
+      <w>126</w>
+      <h>77</h>
+    </coordinates>
+    <panel_attributes>&lt;&lt;Enum&gt;&gt;
+Status
+--
+ONLINE, OFFLINE, BUSY
+
+-.
+valign=top
+</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>987</x>
+      <y>49</y>
+      <w>126</w>
+      <h>154</h>
+    </coordinates>
+    <panel_attributes>&lt;&lt;Entity&gt;&gt;
+User
+--
+id: String,
+name: String,
+email: String,
+status: Status,
+interest: String,
+department: String,
+room: String,
+profilePicture: String?
+
+-.
+valign=top
+</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>602</x>
+      <y>238</y>
+      <w>385</w>
+      <h>77</h>
+    </coordinates>
+    <panel_attributes>&lt;&lt;Enum&gt;&gt;
+UserExposedProperty
+--
+NAME, EMAIL, STATUS, INTEREST, DEPARTMENT, ROOM, PROFILE_PICTURE
+
+-.
+valign=top
+</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>917</x>
+      <y>112</y>
+      <w>84</w>
+      <h>21</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;-</panel_attributes>
+    <additional_attributes>10.0;10.0;100.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLFrame</id>
+    <coordinates>
+      <x>574</x>
+      <y>399</y>
+      <w>546</w>
+      <h>329</h>
+    </coordinates>
+    <panel_attributes>repository</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>679</x>
+      <y>469</y>
+      <w>357</w>
+      <h>182</h>
+    </coordinates>
+    <panel_attributes>&lt;&lt;Interface&gt;&gt;
+UserRepository
+--
+
+
+-.
+valign=top
+create(user: User)
+getById(id: String): User?
+delete(id: String)
+updateProperty(id: String, property: UserExposedProperty, value: Any?)
+getProperty(id: String, property: UserExposedProperty): Any?
+sendFriendRequest(fromId: String, toId: String)
+getPendingFriendRequests(userId: String): List&lt;FriendRequest&gt;
+getFriends(userId: String): List&lt;User&gt;
+removeFriend(userId: String, friendId: String)
+getFriendsOfFriends(userId: String): List&lt;User&gt;</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLFrame</id>
+    <coordinates>
+      <x>574</x>
+      <y>42</y>
+      <w>546</w>
+      <h>329</h>
+    </coordinates>
+    <panel_attributes>model</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLFrame</id>
+    <coordinates>
+      <x>1176</x>
+      <y>399</y>
+      <w>546</w>
+      <h>329</h>
+    </coordinates>
+    <panel_attributes>Usersrevice</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>1211</x>
+      <y>462</y>
+      <w>490</w>
+      <h>182</h>
+    </coordinates>
+    <panel_attributes>UserService
+--
+
+
+-.
+valign=top
+create(name : string, email : string, status : Status, interest : string, department : string, room : string) : User
+getUser (IdString : User) :  User? 
+deleteUser(IdString : User) 
+change (UserId : string, property : UserExposedProperty, NewValue : any)
+Get (UserId : string , property : UserExposedProperty ) : any?
+SendFriendRequest(fromId : String, toId: string) 
+getFriends(userId : string) : List&lt;User&gt;
+removeFriend(userId : string, friendId: string)
+getPendingFriendRequest (UserId : string) List&lt;FriendRequest&gt;</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLFrame</id>
+    <coordinates>
+      <x>7</x>
+      <y>406</y>
+      <w>546</w>
+      <h>329</h>
+    </coordinates>
+    <panel_attributes>Database</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLActor</id>
+    <coordinates>
+      <x>1400</x>
+      <y>301</y>
+      <w>56</w>
+      <h>77</h>
+    </coordinates>
+    <panel_attributes>Benutzer</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>0</x>
+      <y>476</y>
+      <w>140</w>
+      <h>49</h>
+    </coordinates>
+    <panel_attributes>Datebase</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLState</id>
+    <coordinates>
+      <x>182</x>
+      <y>469</y>
+      <w>357</w>
+      <h>182</h>
+    </coordinates>
+    <panel_attributes>Neo4jUserRepository
+--
+
+
+-.
+valign=top
+fun create(user: User)
+getById(id: String): User?
+delete(id: String)
+updateProperty(id: String, property: UserExposedProperty, value: Any?)
+getProperty(id: String, property: UserExposedProperty): Any?
+sendFriendRequest(fromId: String, toId: String)
+ getPendingFriendRequests(userId: String): List&lt;FriendRequest&gt;
+getFriends(userId: String): List&lt;User&gt;
+removeFriend(userId: String, friendId: String)
+getFriendsOfFriends(userId: String): List&lt;User&gt;</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLFrame</id>
+    <coordinates>
+      <x>560</x>
+      <y>0</y>
+      <w>1197</w>
+      <h>749</h>
+    </coordinates>
+    <panel_attributes>Core</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1029</x>
+      <y>469</y>
+      <w>196</w>
+      <h>35</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;-</panel_attributes>
+    <additional_attributes>10.0;30.0;260.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1078</x>
+      <y>364</y>
+      <w>147</w>
+      <h>126</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;-</panel_attributes>
+    <additional_attributes>10.0;10.0;190.0;160.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>826</x>
+      <y>364</y>
+      <w>21</w>
+      <h>119</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;-</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;150.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>469</x>
+      <y>364</y>
+      <w>147</w>
+      <h>119</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;-</panel_attributes>
+    <additional_attributes>190.0;10.0;10.0;150.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>532</x>
+      <y>476</y>
+      <w>161</w>
+      <h>21</h>
+    </coordinates>
+    <panel_attributes>lt=.&gt;&gt;</panel_attributes>
+    <additional_attributes>10.0;10.0;210.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>1421</x>
+      <y>364</y>
+      <w>21</w>
+      <h>112</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;-</panel_attributes>
+    <additional_attributes>10.0;140.0;10.0;10.0</additional_attributes>
+  </element>
+</diagram>
