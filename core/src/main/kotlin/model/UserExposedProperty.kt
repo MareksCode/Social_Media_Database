@@ -1,6 +1,8 @@
 package model
 
-data class UserExposedProperty(
+data class UserUpdate(
+    val userIdToUpdate: String,
+
     val name: String? = null,
     val email: String? = null,
     val status: Status? = null,
