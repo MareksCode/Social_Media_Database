@@ -1,13 +1,19 @@
 package service
 
 import model.FriendRequest
+import model.Friendship
 import model.Status
 import model.User
-import model.UserExposedProperty
+import model.UserUpdate
 import repository.UserRepository
+import java.time.Clock
+import java.time.Instant
 import java.util.UUID
 
-class UserService(private val repository: UserRepository) {
+class UserService(
+    private val repository: UserRepository,
+    private val clock: Clock = Clock.systemUTC()
+) {
     fun createUser(name: String, email: String, status: Status, interest: String, department: String, room: String): User {
         val user = User(
             id = UUID.randomUUID().toString(),
