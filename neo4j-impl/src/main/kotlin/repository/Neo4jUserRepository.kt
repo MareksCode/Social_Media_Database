@@ -1,14 +1,16 @@
 package repository
 
 import model.FriendRequest
+import model.Friendship
 import model.Status
 import model.User
-import model.UserExposedProperty
+import model.UserUpdate
 import org.neo4j.driver.AuthTokens
 import org.neo4j.driver.Driver
 import org.neo4j.driver.GraphDatabase
 import org.neo4j.driver.Values.parameters
 import org.neo4j.driver.types.Node
+import java.time.Instant
 
 class Neo4jUserRepository(private val driver: Driver) : UserRepository {
     companion object {
@@ -20,7 +22,7 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
         id = this["id"].asString(),
         name = this["name"].asString(),
         email = this["email"].asString(),
-        status = Status.entries.firstOrNull { status -> status.name == this["status"].asString() } ?: Status.OFFLINE,
+        status = runCatching { Status.valueOf(this["status"].asString()) }.getOrDefault(Status.OFFLINE),
         interest = this["interest"].asString(),
         department = this["department"].asString(),
         room = this["room"].asString(),
@@ -54,16 +56,11 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
         }
     }
 
-    override fun getById(id: String): User? {
-        driver.session().use { session ->
-            val queryResult = session.run(
-                "MATCH (user:User {id: \$userId}) RETURN user",
-                parameters("userId", id)
-            )
-            val matchedRecords = queryResult.list()
-            if (matchedRecords.isEmpty()) return null
-            return matchedRecords[0]["user"].asNode().toUser()
-        }
+    override fun getById(id: String): User? = driver.session().use { session ->
+        session.run(
+            "MATCH (user:User {id: \$userId}) RETURN user",
+            parameters("userId", id)
+        ).list().firstOrNull()?.get("user")?.asNode()?.toUser()
     }
 
     override fun delete(id: String) {
