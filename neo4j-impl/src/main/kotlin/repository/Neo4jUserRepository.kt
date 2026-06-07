@@ -72,7 +72,7 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
         }
     }
 
-    override fun updateUser(id: String, update: UserExposedProperty) {
+    override fun update(id: String, update: UserUpdate) {
         val props = buildMap<String, Any?> {
             update.name?.let { put("name", it) }
             update.email?.let { put("email", it) }
@@ -91,46 +91,62 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
         }
     }
 
-    override fun sendFriendRequest(fromId: String, toId: String) {
+    override fun addFriendRequest(fromId: String, toId: String, sendTime: Instant) {
         driver.session().use { session ->
             session.run(
                 """MATCH (sender:User {id: ${'$'}senderId}), (receiver:User {id: ${'$'}receiverId})
-                   OPTIONAL MATCH (receiver)-[existingRequest:SENT_REQUEST]->(sender)
-                   WITH sender, receiver, existingRequest, existingRequest IS NOT NULL AS isMutualRequest
-                   CALL (sender, receiver, existingRequest, isMutualRequest) {
-                     WITH sender, receiver, existingRequest WHERE isMutualRequest
-                     DELETE existingRequest
-                     MERGE (sender)-[:FRIENDS_WITH]->(receiver)
-                     MERGE (receiver)-[:FRIENDS_WITH]->(sender)
-                   }
-                   CALL (sender, receiver, isMutualRequest) {
-                     WITH sender, receiver WHERE NOT isMutualRequest
-                     MERGE (sender)-[:SENT_REQUEST]->(receiver)
-                   }""",
+                   MERGE (sender)-[r:SENT_REQUEST]->(receiver)
+                   ON CREATE SET r.sentTimeEpochMs = ${'$'}sentTimeEpochMs""",
+                parameters("senderId", fromId, "receiverId", toId, "sentTimeEpochMs", sendTime.toEpochMilli())
+            )
+        }
+    }
+
+    override fun removeFriendRequest(fromId: String, toId: String) {
+        driver.session().use { session ->
+            session.run(
+                "MATCH (sender:User {id: \$senderId})-[r:SENT_REQUEST]->(receiver:User {id: \$receiverId}) DELETE r",
                 parameters("senderId", fromId, "receiverId", toId)
             )
         }
     }
 
-    override fun getPendingFriendRequests(userId: String): List<FriendRequest> {
+    override fun friendRequestExists(fromId: String, toId: String): Boolean {
         return driver.session().use { session ->
             session.run(
-                """MATCH (requester:User)-[:SENT_REQUEST]->(recipient:User {id: ${'$'}userId})
-                   RETURN requester.id AS requesterId, recipient.id AS recipientId""",
+                """MATCH (sender:User {id: ${'$'}senderId})-[r:SENT_REQUEST]->(receiver:User {id: ${'$'}receiverId})
+                   RETURN count(r) > 0 AS exists""",
+                parameters("senderId", fromId, "receiverId", toId)
+            ).single()["exists"].asBoolean()
+        }
+    }
+
+    override fun getIncomingFriendRequests(userId: String): List<FriendRequest> {
+        return driver.session().use { session ->
+            session.run(
+                """MATCH (requester:User)-[r:SENT_REQUEST]->(recipient:User {id: ${'$'}userId})
+                   RETURN requester.id AS requesterId, recipient.id AS recipientId, r.sentTimeEpochMs AS sentTimeEpochMs""",
                 parameters("userId", userId)
             ).list { record ->
-                FriendRequest(record["requesterId"].asString(), record["recipientId"].asString())
+                FriendRequest(
+                    record["requesterId"].asString(),
+                    record["recipientId"].asString(),
+                    Instant.ofEpochMilli(record["sentTimeEpochMs"].asLong())
+                )
             }
         }
     }
 
-    override fun getFriends(userId: String): List<User> {
+    override fun addFriend(userId: String, friendId: String, createTime: Instant) {
         driver.session().use { session ->
-            val queryResult = session.run(
-                "MATCH (user:User {id: \$userId})-[:FRIENDS_WITH]->(friend:User) RETURN friend",
-                parameters("userId", userId)
+            session.run(
+                """MATCH (user:User {id: ${'$'}userId}), (friend:User {id: ${'$'}friendId})
+                   MERGE (user)-[r1:FRIENDS_WITH]->(friend)
+                   ON CREATE SET r1.createdAtEpochMs = ${'$'}createdAtEpochMs
+                   MERGE (friend)-[r2:FRIENDS_WITH]->(user)
+                   ON CREATE SET r2.createdAtEpochMs = ${'$'}createdAtEpochMs""",
+                parameters("userId", userId, "friendId", friendId, "createdAtEpochMs", createTime.toEpochMilli())
             )
-            return queryResult.list { record -> record["friend"].asNode().toUser() }
         }
     }
 
@@ -145,17 +161,28 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
         }
     }
 
-    override fun getFriendsOfFriends(userId: String): List<User> {
-        driver.session().use { session ->
-            val queryResult = session.run(
-                """MATCH (targetUser:User {id: ${'$'}userId})-[:FRIENDS_WITH]->(directFriend)-[:FRIENDS_WITH]->(friendOfFriend)
-                   WHERE NOT (targetUser)-[:FRIENDS_WITH]->(friendOfFriend) AND friendOfFriend <> targetUser
-                   WITH friendOfFriend, count(directFriend) AS sharedFriendCount
-                   ORDER BY sharedFriendCount DESC
-                   RETURN friendOfFriend""",
-                parameters("userId", userId)
+    override fun getFriends(userId: String): List<Friendship> = driver.session().use { session ->
+        session.run(
+            """MATCH (user:User {id: ${'$'}userId})-[r:FRIENDS_WITH]->(friend:User)
+               RETURN friend, r.createdAtEpochMs AS createdAtEpochMs""",
+            parameters("userId", userId)
+        ).list { record ->
+            Friendship(
+                record["friend"].asNode().toUser(),
+                Instant.ofEpochMilli(record["createdAtEpochMs"].asLong())
             )
-            return queryResult.list { record -> record["friendOfFriend"].asNode().toUser() }
+        }
+    }
+
+    override fun getFriendsOf(userIds: Collection<String>): List<User> {
+        if (userIds.isEmpty()) return emptyList()
+        return driver.session().use { session ->
+            session.run(
+                """MATCH (user:User)-[:FRIENDS_WITH]->(friend:User)
+                   WHERE user.id IN ${'$'}userIds
+                   RETURN friend""",
+                parameters("userIds", userIds.toList())
+            ).list { record -> record["friend"].asNode().toUser() }
         }
     }
 
