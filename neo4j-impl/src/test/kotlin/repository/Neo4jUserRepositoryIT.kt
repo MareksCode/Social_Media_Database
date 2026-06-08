@@ -1,9 +1,8 @@
 package repository
 
-import model.FriendRequest
 import model.Status
 import model.User
-import model.UserExposedProperty
+import model.UserUpdate
 import org.junit.jupiter.api.AfterAll
 import service.UserService
 import org.junit.jupiter.api.AfterEach
@@ -17,6 +16,9 @@ import org.junit.jupiter.api.TestInfo
 import org.junit.jupiter.api.TestInstance
 import org.neo4j.driver.AuthTokens
 import org.neo4j.driver.GraphDatabase
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class Neo4jUserRepositoryIT {
@@ -26,15 +28,19 @@ class Neo4jUserRepositoryIT {
     private lateinit var repository: Neo4jUserRepository
     private lateinit var userService: UserService
 
+    private val fixedNow = Instant.parse("2026-06-10T12:00:00Z")
+    private val clock = Clock.fixed(fixedNow, ZoneOffset.UTC)
+
     @BeforeAll
     fun start() {
         driver = GraphDatabase.driver("bolt://localhost:7687", AuthTokens.basic("neo4j", "passwort"))
         repository = Neo4jUserRepository(driver)
-        userService = UserService(repository)
+        userService = UserService(repository, clock)
     }
 
     @AfterAll
     fun stop() {
+        clearDatabase()
         repository.close()
         driver.close()
     }
@@ -60,10 +66,8 @@ class Neo4jUserRepositoryIT {
         profilePicture = ""
     )
 
-
     private fun makeFriends(a: String, b: String) {
-        repository.sendFriendRequest(a, b)
-        repository.sendFriendRequest(b, a)
+        repository.addFriend(a, b, fixedNow)
     }
 
     // --- create / getById ---
@@ -98,120 +102,144 @@ class Neo4jUserRepositoryIT {
         assertEquals("https://example.com/pic.jpg", repository.getById("1")!!.profilePicture)
     }
 
-    // --- updateUser ---
+    // --- update ---
 
     @Test
-    fun `updateUser changes name`() {
+    fun `update changes name`() {
         repository.create(user("1", "Alice"))
-        repository.updateUser("1", UserExposedProperty(name = "Alice Updated"))
+        repository.update("1", UserUpdate(name = "Alice Updated"))
         assertEquals("Alice Updated", repository.getById("1")!!.name)
     }
 
     @Test
-    fun `updateUser changes status`() {
+    fun `update changes status`() {
         repository.create(user("1", "Alice"))
-        repository.updateUser("1", UserExposedProperty(status = Status.BUSY))
+        repository.update("1", UserUpdate(status = Status.BUSY))
         assertEquals(Status.BUSY, repository.getById("1")!!.status)
     }
 
     @Test
-    fun `updateUser changes multiple fields`() {
+    fun `update changes multiple fields`() {
         repository.create(user("1", "Alice"))
-        repository.updateUser("1", UserExposedProperty(name = "Alice Updated", department = "HR"))
+        repository.update("1", UserUpdate(name = "Alice Updated", department = "HR"))
         val updated = repository.getById("1")!!
         assertEquals("Alice Updated", updated.name)
         assertEquals("HR", updated.department)
     }
 
     @Test
-    fun `updateUser does not change unset fields`() {
+    fun `update does not change unset fields`() {
         repository.create(user("1", "Alice"))
-        repository.updateUser("1", UserExposedProperty(name = "Alice Updated"))
+        repository.update("1", UserUpdate(name = "Alice Updated"))
         val updated = repository.getById("1")!!
         assertEquals("1@example.com", updated.email)
         assertEquals(Status.ONLINE, updated.status)
     }
 
     @Test
-    fun `updateUser with empty object changes nothing`() {
+    fun `update with empty object changes nothing`() {
         val u = user("1", "Alice")
         repository.create(u)
-        repository.updateUser("1", UserExposedProperty())
+        repository.update("1", UserUpdate())
         assertEquals(u, repository.getById("1"))
     }
 
-    // --- sendFriendRequest ---
+    // --- friend requests (primitives) ---
 
     @Test
-    fun `sendFriendRequest stores pending request`() {
+    fun `addFriendRequest stores incoming request with sendTime`() {
         repository.create(user("1", "Alice"))
         repository.create(user("2", "Bob"))
-        repository.sendFriendRequest("1", "2")
-        val pending = repository.getPendingFriendRequests("2")
-        assertEquals(1, pending.size)
-        assertEquals("1", pending[0].fromId)
-        assertEquals("2", pending[0].toId)
+        repository.addFriendRequest("1", "2", fixedNow)
+        val incoming = repository.getIncomingFriendRequests("2")
+        assertEquals(1, incoming.size)
+        assertEquals("1", incoming[0].fromId)
+        assertEquals("2", incoming[0].toId)
+        assertEquals(fixedNow.toEpochMilli(), incoming[0].sendTime.toEpochMilli())
     }
+
+    @Test
+    fun `addFriendRequest is idempotent`() {
+        repository.create(user("1", "Alice"))
+        repository.create(user("2", "Bob"))
+        repository.addFriendRequest("1", "2", fixedNow)
+        repository.addFriendRequest("1", "2", fixedNow)
+        assertEquals(1, repository.getIncomingFriendRequests("2").size)
+    }
+
+    @Test
+    fun `removeFriendRequest deletes the request`() {
+        repository.create(user("1", "Alice"))
+        repository.create(user("2", "Bob"))
+        repository.addFriendRequest("1", "2", fixedNow)
+        repository.removeFriendRequest("1", "2")
+        assertTrue(repository.getIncomingFriendRequests("2").isEmpty())
+    }
+
+    @Test
+    fun `friendRequestExists reflects presence of request`() {
+        repository.create(user("1", "Alice"))
+        repository.create(user("2", "Bob"))
+        assertTrue(!repository.friendRequestExists("1", "2"))
+        repository.addFriendRequest("1", "2", fixedNow)
+        assertTrue(repository.friendRequestExists("1", "2"))
+        assertTrue(!repository.friendRequestExists("2", "1"))
+    }
+
+    @Test
+    fun `getIncomingFriendRequests returns only requests sent to userId`() {
+        repository.create(user("1", "Alice"))
+        repository.create(user("2", "Bob"))
+        repository.create(user("3", "Carol"))
+        repository.addFriendRequest("2", "1", fixedNow)
+        repository.addFriendRequest("3", "1", fixedNow)
+        val incoming = repository.getIncomingFriendRequests("1")
+        assertEquals(2, incoming.size)
+        assertTrue(incoming.all { it.toId == "1" })
+    }
+
+    @Test
+    fun `getIncomingFriendRequests does not return outgoing requests`() {
+        repository.create(user("1", "Alice"))
+        repository.create(user("2", "Bob"))
+        repository.addFriendRequest("1", "2", fixedNow)
+        assertTrue(repository.getIncomingFriendRequests("1").isEmpty())
+    }
+
+    // --- friend requests (service flow) ---
 
     @Test
     fun `sendFriendRequest one-sided does not create friend relation`() {
         repository.create(user("1", "Alice"))
         repository.create(user("2", "Bob"))
-        repository.sendFriendRequest("1", "2")
+        userService.sendFriendRequest("1", "2")
         assertTrue(repository.getFriends("1").isEmpty())
         assertTrue(repository.getFriends("2").isEmpty())
     }
 
     @Test
-    fun `sendFriendRequest mutual send creates friendship`() {
+    fun `sendFriendRequest mutual send creates friendship and clears requests`() {
         repository.create(user("1", "Alice"))
         repository.create(user("2", "Bob"))
-        makeFriends("1", "2")
-        assertTrue("2" in repository.getFriends("1").map { it.id })
-        assertTrue("1" in repository.getFriends("2").map { it.id })
+        userService.sendFriendRequest("1", "2")
+        userService.sendFriendRequest("2", "1")
+        assertTrue("2" in repository.getFriends("1").map { it.friend.id })
+        assertTrue("1" in repository.getFriends("2").map { it.friend.id })
+        assertTrue(repository.getIncomingFriendRequests("1").isEmpty())
+        assertTrue(repository.getIncomingFriendRequests("2").isEmpty())
     }
 
     @Test
-    fun `sendFriendRequest mutual send removes pending requests`() {
+    fun `declineFriendRequest removes the pending request`() {
         repository.create(user("1", "Alice"))
         repository.create(user("2", "Bob"))
-        makeFriends("1", "2")
-        assertTrue(repository.getPendingFriendRequests("1").isEmpty())
-        assertTrue(repository.getPendingFriendRequests("2").isEmpty())
+        userService.sendFriendRequest("1", "2")
+        userService.declineFriendRequest("2", "1")
+        assertTrue(repository.getIncomingFriendRequests("2").isEmpty())
+        assertTrue(repository.getFriends("1").isEmpty())
     }
 
-    @Test
-    fun `sendFriendRequest duplicate does not create duplicate pending request`() {
-        repository.create(user("1", "Alice"))
-        repository.create(user("2", "Bob"))
-        repository.sendFriendRequest("1", "2")
-        repository.sendFriendRequest("1", "2")
-        assertEquals(1, repository.getPendingFriendRequests("2").size)
-    }
-
-    // --- getPendingFriendRequests ---
-
-    @Test
-    fun `getPendingFriendRequests returns only requests sent to userId`() {
-        repository.create(user("1", "Alice"))
-        repository.create(user("2", "Bob"))
-        repository.create(user("3", "Carol"))
-        repository.sendFriendRequest("2", "1")
-        repository.sendFriendRequest("3", "1")
-        val pending = repository.getPendingFriendRequests("1")
-        assertEquals(2, pending.size)
-        assertTrue(pending.all { it.toId == "1" })
-    }
-
-    @Test
-    fun `getPendingFriendRequests does not return sent requests`() {
-        repository.create(user("1", "Alice"))
-        repository.create(user("2", "Bob"))
-        repository.sendFriendRequest("1", "2")
-        assertTrue(repository.getPendingFriendRequests("1").isEmpty())
-    }
-
-    // --- getFriends ---
+    // --- addFriend / getFriends ---
 
     @Test
     fun `getFriends returns empty list for user with no friends`() {
