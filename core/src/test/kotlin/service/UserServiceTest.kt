@@ -4,9 +4,10 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import model.FriendRequest
+import model.Friendship
 import model.Status
 import model.User
-import model.UserExposedProperty
+import model.UserUpdate
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -14,17 +15,24 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import repository.UserRepository
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 
 class UserServiceTest {
     private val repository = mockk<UserRepository>(relaxed = true)
-    private val service = UserService(repository)
+    private val now = Instant.parse("2026-06-10T12:00:00Z")
+    private val clock = Clock.fixed(now, ZoneOffset.UTC)
+    private val service = UserService(repository, clock)
 
-    private val testUser = User(
-        id = "1", name = "testUser", email = "testuser@example.com",
+    private fun user(id: String, name: String = "User$id") = User(
+        id = id, name = name, email = "$id@example.com",
         status = Status.ONLINE, interest = "clash royale",
         department = "IT", room = "007",
         profilePicture = ""
     )
+
+    private val testUser = user("1", "testUser")
 
     @Test
     fun `createUser generates non-blank id and stores user`() {
@@ -72,22 +80,31 @@ class UserServiceTest {
 
     @Test
     fun `updateUser delegates to repository`() {
-        val update = UserExposedProperty(name = "Bob")
+        val update = UserUpdate(name = "Bob")
         service.updateUser("1", update)
-        verify { repository.updateUser("1", update) }
+        verify { repository.update("1", update) }
     }
 
     @Test
     fun `updateUser with multiple fields delegates to repository`() {
-        val update = UserExposedProperty(name = "Bob", status = Status.BUSY)
+        val update = UserUpdate(name = "Bob", status = Status.BUSY)
         service.updateUser("1", update)
-        verify { repository.updateUser("1", update) }
+        verify { repository.update("1", update) }
     }
 
     @Test
-    fun `sendFriendRequest delegates to repository`() {
+    fun `sendFriendRequest with no reverse request stores a request with clock time`() {
+        every { repository.friendRequestExists("2", "1") } returns false
         service.sendFriendRequest("1", "2")
-        verify { repository.sendFriendRequest("1", "2") }
+        verify { repository.addFriendRequest("1", "2", now) }
+    }
+
+    @Test
+    fun `sendFriendRequest with reverse request pending creates friendship`() {
+        every { repository.friendRequestExists("2", "1") } returns true
+        service.sendFriendRequest("1", "2")
+        verify { repository.removeFriendRequest("2", "1") }
+        verify { repository.addFriend("1", "2", now) }
     }
 
     @Test
@@ -96,22 +113,46 @@ class UserServiceTest {
     }
 
     @Test
-    fun `getPendingFriendRequests delegates to repository`() {
-        val requests = listOf(FriendRequest("2", "1"))
-        every { repository.getPendingFriendRequests("1") } returns requests
+    fun `declineFriendRequest removes the incoming request`() {
+        service.declineFriendRequest("1", "2")
+        verify { repository.removeFriendRequest("2", "1") }
+    }
+
+    @Test
+    fun `getPendingFriendRequests delegates to getIncomingFriendRequests`() {
+        val requests = listOf(FriendRequest("2", "1", now))
+        every { repository.getIncomingFriendRequests("1") } returns requests
         assertEquals(requests, service.getPendingFriendRequests("1"))
     }
 
     @Test
     fun `getFriends delegates to repository`() {
-        every { repository.getFriends("1") } returns listOf(testUser)
-        assertEquals(listOf(testUser), service.getFriends("1"))
+        val friendships = listOf(Friendship(testUser, now))
+        every { repository.getFriends("1") } returns friendships
+        assertEquals(friendships, service.getFriends("1"))
     }
 
     @Test
-    fun `suggestFriends delegates to getFriendsOfFriends`() {
-        every { repository.getFriendsOfFriends("1") } returns listOf(testUser)
-        assertEquals(listOf(testUser), service.suggestFriends("1"))
+    fun `getFriendRecommendations excludes self and direct friends and ranks by shared count`() {
+        // A friends with B and C; D shares B and C (count 2); E shares only B (count 1)
+        every { repository.getFriends("A") } returns listOf(
+            Friendship(user("B"), now), Friendship(user("C"), now)
+        )
+        every { repository.getFriendsOf(setOf("B", "C")) } returns listOf(
+            user("A"), user("D"),   // via B
+            user("A"), user("D"),   // via C
+            user("E"),              // via B
+            user("B"), user("C")    // reciprocal edges back to direct friends
+        )
+        val recommendations = service.getFriendRecommendations("A").map { it.id }
+        assertEquals(listOf("D", "E"), recommendations)
+    }
+
+    @Test
+    fun `getFriendRecommendations returns empty when user has no friends`() {
+        every { repository.getFriends("A") } returns emptyList()
+        every { repository.getFriendsOf(emptySet()) } returns emptyList()
+        assertTrue(service.getFriendRecommendations("A").isEmpty())
     }
 
     @Test
