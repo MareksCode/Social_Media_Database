@@ -248,15 +248,15 @@ class Neo4jUserRepositoryIT {
     }
 
     @Test
-    fun `getFriends returns correct user data`() {
+    fun `addFriend creates bidirectional friendship with createTime`() {
         repository.create(user("1", "Alice"))
         repository.create(user("2", "Bob"))
-        makeFriends("1", "2")
-        val friends = repository.getFriends("1")
-        assertEquals(1, friends.size)
-        assertEquals("2", friends[0].id)
-        assertEquals("Bob", friends[0].name)
-        assertEquals("2@example.com", friends[0].email)
+        repository.addFriend("1", "2", fixedNow)
+        val friendship = repository.getFriends("1").single()
+        assertEquals("2", friendship.friend.id)
+        assertEquals("Bob", friendship.friend.name)
+        assertEquals(fixedNow.toEpochMilli(), friendship.createTime.toEpochMilli())
+        assertEquals("1", repository.getFriends("2").single().friend.id)
     }
 
     @Test
@@ -265,7 +265,7 @@ class Neo4jUserRepositoryIT {
         repository.create(user("2", "Bob"))
         repository.create(user("3", "Carol"))
         makeFriends("1", "2")
-        val friendIds = repository.getFriends("1").map { it.id }
+        val friendIds = repository.getFriends("1").map { it.friend.id }
         assertTrue("2" in friendIds)
         assertTrue("3" !in friendIds)
     }
@@ -277,7 +277,7 @@ class Neo4jUserRepositoryIT {
         repository.create(user("3", "Carol"))
         makeFriends("1", "2")
         makeFriends("1", "3")
-        val friendIds = repository.getFriends("1").map { it.id }
+        val friendIds = repository.getFriends("1").map { it.friend.id }
         assertEquals(2, friendIds.size)
         assertTrue("2" in friendIds)
         assertTrue("3" in friendIds)
@@ -303,36 +303,58 @@ class Neo4jUserRepositoryIT {
         makeFriends("1", "2")
         makeFriends("1", "3")
         repository.removeFriend("1", "2")
-        val friendIds = repository.getFriends("1").map { it.id }
+        val friendIds = repository.getFriends("1").map { it.friend.id }
         assertTrue("2" !in friendIds)
         assertTrue("3" in friendIds)
     }
 
-    // --- getFriendsOfFriends ---
+    // --- getFriendsOf (batched primitive) ---
 
     @Test
-    fun `getFriendsOfFriends returns empty when no 2-hop connections`() {
-        repository.create(user("1", "Alice"))
-        repository.create(user("2", "Bob"))
-        makeFriends("1", "2")
-        assertTrue(repository.getFriendsOfFriends("1").isEmpty())
+    fun `getFriendsOf returns friends of all given users with duplicates`() {
+        repository.create(user("A"))
+        repository.create(user("B"))
+        repository.create(user("C"))
+        repository.create(user("D"))
+        makeFriends("A", "B")
+        makeFriends("A", "C")
+        makeFriends("B", "D")
+        makeFriends("C", "D")
+        // friends of {B, C}: B -> {A, D}, C -> {A, D}
+        val ids = repository.getFriendsOf(listOf("B", "C")).map { it.id }.sorted()
+        assertEquals(listOf("A", "A", "D", "D"), ids)
     }
 
     @Test
-    fun `getFriendsOfFriends returns 2-hop users excluding direct friends and self`() {
+    fun `getFriendsOf returns empty for empty input`() {
+        assertTrue(repository.getFriendsOf(emptyList()).isEmpty())
+    }
+
+    // --- getFriendRecommendations (service) ---
+
+    @Test
+    fun `getFriendRecommendations returns empty when no 2-hop connections`() {
+        repository.create(user("1", "Alice"))
+        repository.create(user("2", "Bob"))
+        makeFriends("1", "2")
+        assertTrue(userService.getFriendRecommendations("1").isEmpty())
+    }
+
+    @Test
+    fun `getFriendRecommendations returns 2-hop users excluding direct friends and self`() {
         repository.create(user("A"))
         repository.create(user("B"))
         repository.create(user("C"))
         makeFriends("A", "B")
         makeFriends("B", "C")
-        val fof = repository.getFriendsOfFriends("A").map { it.id }
+        val fof = userService.getFriendRecommendations("A").map { it.id }
         assertTrue("C" in fof)
         assertTrue("A" !in fof)
         assertTrue("B" !in fof)
     }
 
     @Test
-    fun `getFriendsOfFriends orders by common friend count descending`() {
+    fun `getFriendRecommendations orders by common friend count descending`() {
         repository.create(user("A"))
         repository.create(user("B"))
         repository.create(user("C"))
@@ -343,7 +365,7 @@ class Neo4jUserRepositoryIT {
         makeFriends("B", "D")
         makeFriends("C", "D")
         makeFriends("B", "E")
-        val fof = repository.getFriendsOfFriends("A").map { it.id }
+        val fof = userService.getFriendRecommendations("A").map { it.id }
         assertEquals("D", fof[0])
         assertEquals("E", fof[1])
     }
