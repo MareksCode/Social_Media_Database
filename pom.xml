@@ -12,6 +12,7 @@
     <modules>
         <module>core</module>
         <module>neo4j-impl</module>
+        <module>cli</module>
     </modules>
 
     <properties>
