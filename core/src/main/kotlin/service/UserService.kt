@@ -37,11 +37,11 @@ class UserService(
 
     fun sendFriendRequest(fromId: String, toId: String) {
         require(fromId != toId) { "Cannot send friend request to yourself" }
+        require(!repository.areFriends(fromId, toId)) { "Users are already friends" }
         val now = Instant.now(clock)
         if (repository.friendRequestExists(toId, fromId)) {
-            // reverse request already pending
-            repository.removeFriendRequest(toId, fromId)
-            repository.addFriend(fromId, toId, now)
+            // reverse request already pending: accept it (atomic remove + befriend)
+            repository.acceptFriendRequest(fromId, toId, now)
         } else {
             repository.addFriendRequest(fromId, toId, now)
         }

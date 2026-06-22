@@ -20,7 +20,7 @@
         <neo4j.driver.version>5.26.0</neo4j.driver.version>
         <junit.version>5.11.0</junit.version>
         <mockk.version>1.13.13</mockk.version>
-        <testcontainers.version>1.20.6</testcontainers.version>
+        <slf4j.version>1.7.36</slf4j.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
@@ -42,6 +42,11 @@
                 <version>${project.version}</version>
             </dependency>
             <dependency>
+                <groupId>com.example</groupId>
+                <artifactId>neo4j-impl</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>org.junit.jupiter</groupId>
                 <artifactId>junit-jupiter</artifactId>
                 <version>${junit.version}</version>
@@ -51,11 +56,10 @@
                 <artifactId>mockk-jvm</artifactId>
                 <version>${mockk.version}</version>
             </dependency>
-            
             <dependency>
-                <groupId>org.testcontainers</groupId>
-                <artifactId>neo4j</artifactId>
-                <version>${testcontainers.version}</version>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-simple</artifactId>
+                <version>${slf4j.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -95,11 +99,31 @@
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>3.5.2</version>
                     <configuration>
+                        <!-- Unit tests only. Integration tests (*IT) require a live
+                             Neo4j and are run by failsafe in the verify phase, so a
+                             plain `mvn test` build does not need a database. -->
                         <includes>
                             <include>**/*Test</include>
+                        </includes>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <version>3.5.2</version>
+                    <configuration>
+                        <includes>
                             <include>**/*IT</include>
                         </includes>
                     </configuration>
+                    <executions>
+                        <execution>
+                            <goals>
+                                <goal>integration-test</goal>
+                                <goal>verify</goal>
+                            </goals>
+                        </execution>
+                    </executions>
                 </plugin>
             </plugins>
         </pluginManagement>

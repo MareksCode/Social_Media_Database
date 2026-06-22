@@ -16,6 +16,14 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
     companion object {
         fun connect(uri: String, username: String, password: String): Neo4jUserRepository =
             Neo4jUserRepository(GraphDatabase.driver(uri, AuthTokens.basic(username, password)))
+                .also { it.ensureSchema() }
+    }
+
+    /** Enforces unique User.id so a duplicate id cannot create a second node. */
+    fun ensureSchema() {
+        driver.session().use { session ->
+            session.run("CREATE CONSTRAINT user_id_unique IF NOT EXISTS FOR (u:User) REQUIRE u.id IS UNIQUE")
+        }
     }
 
     private fun Node.toUser(): User = User(
@@ -137,6 +145,25 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
         }
     }
 
+    override fun acceptFriendRequest(fromId: String, toId: String, createTime: Instant) {
+        driver.session().use { session ->
+            session.run(
+                """MATCH (sender:User {id: ${'$'}senderId}), (receiver:User {id: ${'$'}receiverId})
+                   OPTIONAL MATCH (receiver)-[rev:SENT_REQUEST]->(sender)
+                   DELETE rev
+                   MERGE (sender)-[r1:FRIENDS_WITH]->(receiver)
+                   ON CREATE SET r1.createdAtEpochMs = ${'$'}createdAtEpochMs
+                   MERGE (receiver)-[r2:FRIENDS_WITH]->(sender)
+                   ON CREATE SET r2.createdAtEpochMs = ${'$'}createdAtEpochMs""",
+                parameters(
+                    "senderId", fromId,
+                    "receiverId", toId,
+                    "createdAtEpochMs", createTime.toEpochMilli()
+                )
+            )
+        }
+    }
+
     override fun addFriend(userId: String, friendId: String, createTime: Instant) {
         driver.session().use { session ->
             session.run(
@@ -152,12 +179,22 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
 
     override fun removeFriend(userId: String, friendId: String) {
         driver.session().use { session ->
+            // Undirected match deletes both directions, even if only one edge exists.
             session.run(
-                """MATCH (user:User {id: ${'$'}userId})-[userToFriend:FRIENDS_WITH]->(friend:User {id: ${'$'}friendId})
-                   OPTIONAL MATCH (friend)-[friendToUser:FRIENDS_WITH]->(user)
-                   DELETE userToFriend, friendToUser""",
+                """MATCH (user:User {id: ${'$'}userId})-[r:FRIENDS_WITH]-(friend:User {id: ${'$'}friendId})
+                   DELETE r""",
                 parameters("userId", userId, "friendId", friendId)
             )
+        }
+    }
+
+    override fun areFriends(userId: String, friendId: String): Boolean {
+        return driver.session().use { session ->
+            session.run(
+                """MATCH (user:User {id: ${'$'}userId})-[r:FRIENDS_WITH]->(friend:User {id: ${'$'}friendId})
+                   RETURN count(r) > 0 AS areFriends""",
+                parameters("userId", userId, "friendId", friendId)
+            ).single()["areFriends"].asBoolean()
         }
     }
 

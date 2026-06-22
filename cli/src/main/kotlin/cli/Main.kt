@@ -12,7 +12,7 @@ import service.UserService
  * Connection settings (env vars, with defaults):
  *   NEO4J_URI       bolt://localhost:7687
  *   NEO4J_USER      neo4j
- *   NEO4J_PASSWORD  password
+ *   NEO4J_PASSWORD  passwort
  */
 fun main() {
     val uri = System.getenv("NEO4J_URI") ?: "bolt://localhost:7687"
@@ -30,8 +30,11 @@ fun main() {
     val service = UserService(repository)
     println("Connected.\n")
 
-    Cli(service).run()
-    repository.close()
+    try {
+        Cli(service).run()
+    } finally {
+        repository.close()
+    }
     println("Bye.")
 }
 
@@ -110,7 +113,12 @@ private class Cli(private val service: UserService) {
         val department = promptOrNull("Department: ")
         val room = promptOrNull("Room: ")
         val profilePicture = promptOrNull("Profile picture: ")
-        val status = statusRaw?.let { parseStatus(it) }
+        val status = statusRaw?.let {
+            parseStatus(it) ?: run {
+                println("Invalid status '$it' — leaving status unchanged.")
+                null
+            }
+        }
         service.updateUser(
             id,
             UserUpdate(

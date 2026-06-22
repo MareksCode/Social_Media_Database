@@ -103,13 +103,18 @@ class UserServiceTest {
     fun `sendFriendRequest with reverse request pending creates friendship`() {
         every { repository.friendRequestExists("2", "1") } returns true
         service.sendFriendRequest("1", "2")
-        verify { repository.removeFriendRequest("2", "1") }
-        verify { repository.addFriend("1", "2", now) }
+        verify { repository.acceptFriendRequest("1", "2", now) }
     }
 
     @Test
     fun `sendFriendRequest throws when fromId equals toId`() {
         assertThrows<IllegalArgumentException> { service.sendFriendRequest("1", "1") }
+    }
+
+    @Test
+    fun `sendFriendRequest throws when users are already friends`() {
+        every { repository.areFriends("1", "2") } returns true
+        assertThrows<IllegalArgumentException> { service.sendFriendRequest("1", "2") }
     }
 
     @Test

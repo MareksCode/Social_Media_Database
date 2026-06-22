@@ -5,14 +5,12 @@ import model.User
 import model.UserUpdate
 import org.junit.jupiter.api.AfterAll
 import service.UserService
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestInfo
 import org.junit.jupiter.api.TestInstance
 import org.neo4j.driver.AuthTokens
 import org.neo4j.driver.GraphDatabase
@@ -22,8 +20,6 @@ import java.time.ZoneOffset
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class Neo4jUserRepositoryIT {
-    private val waitBetweenTests = false
-
     private lateinit var driver: org.neo4j.driver.Driver
     private lateinit var repository: Neo4jUserRepository
     private lateinit var userService: UserService
@@ -35,6 +31,7 @@ class Neo4jUserRepositoryIT {
     fun start() {
         driver = GraphDatabase.driver("bolt://localhost:7687", AuthTokens.basic("neo4j", "passwort"))
         repository = Neo4jUserRepository(driver)
+        repository.ensureSchema()
         userService = UserService(repository, clock)
     }
 
@@ -48,15 +45,6 @@ class Neo4jUserRepositoryIT {
     @BeforeEach
     fun clearDatabase() {
         driver.session().use { it.run("MATCH (n) DETACH DELETE n") }
-    }
-
-    @AfterEach
-    fun waitForInput(testInfo: TestInfo) {
-        if (waitBetweenTests) {
-            val frame = javax.swing.JFrame().apply { isAlwaysOnTop = true; isVisible = true }
-            javax.swing.JOptionPane.showMessageDialog(frame, "Finished: ${testInfo.displayName}\n\nPress OK to run next test")
-            frame.dispose()
-        }
     }
 
     private fun user(id: String, name: String = "User$id") = User(

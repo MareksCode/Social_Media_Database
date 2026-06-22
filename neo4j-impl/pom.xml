@@ -22,7 +22,6 @@
         <dependency>
             <groupId>com.example</groupId>
             <artifactId>core</artifactId>
-            <version>1.0-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>org.neo4j.driver</groupId>
@@ -34,14 +33,8 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.testcontainers</groupId>
-            <artifactId>neo4j</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-simple</artifactId>
-            <version>1.7.36</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -54,19 +47,9 @@
         </plugin>
         <plugin>
             <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-surefire-plugin</artifactId>
-            <configuration>
-                <environmentVariables>
-                    <DOCKER_HOST>npipe:////./pipe/docker_engine</DOCKER_HOST>
-                    <TESTCONTAINERS_RYUK_DISABLED>true</TESTCONTAINERS_RYUK_DISABLED>
-                </environmentVariables>
-                <systemPropertyVariables>
-                    <docker.host>npipe:////./pipe/docker_engine</docker.host>
-                </systemPropertyVariables>
-            </configuration>
+            <artifactId>maven-failsafe-plugin</artifactId>
         </plugin>
     </plugins>
 </build>
 
-    
 </project>
