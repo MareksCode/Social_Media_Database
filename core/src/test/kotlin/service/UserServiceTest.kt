@@ -20,9 +20,9 @@ import java.time.Instant
 import java.time.ZoneOffset
 
 class UserServiceTest {
-    private val repository = mockk<UserRepository>(relaxed = true)
+    private val repository = mockk<UserRepository>(relaxed = true) // relaxed: unstubbed calls return defaults instead of throwing
     private val now = Instant.parse("2026-06-10T12:00:00Z")
-    private val clock = Clock.fixed(now, ZoneOffset.UTC)
+    private val clock = Clock.fixed(now, ZoneOffset.UTC) // fixed clock: time never advances, tests are deterministic
     private val service = UserService(repository, clock)
 
     private fun user(id: String, name: String = "User$id") = User(
@@ -132,23 +132,23 @@ class UserServiceTest {
 
     @Test
     fun `getFriends delegates to repository`() {
-        val friendships = listOf(Friendship(testUser, now))
+        val friendships = listOf(Friendship("1", "2", now))
         every { repository.getFriends("1") } returns friendships
         assertEquals(friendships, service.getFriends("1"))
     }
 
     @Test
     fun `getFriendRecommendations excludes self and direct friends and ranks by shared count`() {
-        // A friends with B and C; D shares B and C (count 2); E shares only B (count 1)
+        // D has 2 common friends, E has 1
         every { repository.getFriends("A") } returns listOf(
-            Friendship(user("B"), now), Friendship(user("C"), now)
+            Friendship("A", "B", now), Friendship("A", "C", now)
         )
-        every { repository.getFriendsOf(setOf("B", "C")) } returns listOf(
-            user("A"), user("D"),   // via B
-            user("A"), user("D"),   // via C
-            user("E"),              // via B
-            user("B"), user("C")    // reciprocal edges back to direct friends
+        every { repository.getFriendsOf(setOf("B", "C")) } returns mapOf(
+            "B" to listOf(Friendship("B", "A", now), Friendship("B", "D", now), Friendship("B", "E", now)),
+            "C" to listOf(Friendship("C", "A", now), Friendship("C", "D", now), Friendship("C", "B", now))
         )
+        every { repository.getById("D") } returns user("D")
+        every { repository.getById("E") } returns user("E")
         val recommendations = service.getFriendRecommendations("A").map { it.id }
         assertEquals(listOf("D", "E"), recommendations)
     }
@@ -156,7 +156,7 @@ class UserServiceTest {
     @Test
     fun `getFriendRecommendations returns empty when user has no friends`() {
         every { repository.getFriends("A") } returns emptyList()
-        every { repository.getFriendsOf(emptySet()) } returns emptyList()
+        every { repository.getFriendsOf(emptySet()) } returns emptyMap()
         assertTrue(service.getFriendRecommendations("A").isEmpty())
     }
 

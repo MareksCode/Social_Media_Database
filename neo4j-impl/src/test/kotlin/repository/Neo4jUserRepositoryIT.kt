@@ -18,6 +18,7 @@ import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
 
+// PER_CLASS: one shared test instance, so @BeforeAll/@AfterAll can be non-static methods
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class Neo4jUserRepositoryIT {
     private lateinit var driver: org.neo4j.driver.Driver
@@ -44,6 +45,7 @@ class Neo4jUserRepositoryIT {
 
     @BeforeEach
     fun clearDatabase() {
+        // wipe all nodes and relationships before each test for isolation
         driver.session().use { it.run("MATCH (n) DETACH DELETE n") }
     }
 
@@ -211,8 +213,8 @@ class Neo4jUserRepositoryIT {
         repository.create(user("2", "Bob"))
         userService.sendFriendRequest("1", "2")
         userService.sendFriendRequest("2", "1")
-        assertTrue("2" in repository.getFriends("1").map { it.friend.id })
-        assertTrue("1" in repository.getFriends("2").map { it.friend.id })
+        assertTrue("2" in repository.getFriends("1").map { it.other("1") })
+        assertTrue("1" in repository.getFriends("2").map { it.other("2") })
         assertTrue(repository.getIncomingFriendRequests("1").isEmpty())
         assertTrue(repository.getIncomingFriendRequests("2").isEmpty())
     }
@@ -236,15 +238,14 @@ class Neo4jUserRepositoryIT {
     }
 
     @Test
-    fun `addFriend creates bidirectional friendship with createTime`() {
+    fun `addFriend creates a single friendship queryable from both sides`() {
         repository.create(user("1", "Alice"))
         repository.create(user("2", "Bob"))
         repository.addFriend("1", "2", fixedNow)
         val friendship = repository.getFriends("1").single()
-        assertEquals("2", friendship.friend.id)
-        assertEquals("Bob", friendship.friend.name)
+        assertEquals("2", friendship.other("1"))
         assertEquals(fixedNow.toEpochMilli(), friendship.createTime.toEpochMilli())
-        assertEquals("1", repository.getFriends("2").single().friend.id)
+        assertEquals("1", repository.getFriends("2").single().other("2"))
     }
 
     @Test
@@ -253,7 +254,7 @@ class Neo4jUserRepositoryIT {
         repository.create(user("2", "Bob"))
         repository.create(user("3", "Carol"))
         makeFriends("1", "2")
-        val friendIds = repository.getFriends("1").map { it.friend.id }
+        val friendIds = repository.getFriends("1").map { it.other("1") }
         assertTrue("2" in friendIds)
         assertTrue("3" !in friendIds)
     }
@@ -265,7 +266,7 @@ class Neo4jUserRepositoryIT {
         repository.create(user("3", "Carol"))
         makeFriends("1", "2")
         makeFriends("1", "3")
-        val friendIds = repository.getFriends("1").map { it.friend.id }
+        val friendIds = repository.getFriends("1").map { it.other("1") }
         assertEquals(2, friendIds.size)
         assertTrue("2" in friendIds)
         assertTrue("3" in friendIds)
@@ -291,7 +292,7 @@ class Neo4jUserRepositoryIT {
         makeFriends("1", "2")
         makeFriends("1", "3")
         repository.removeFriend("1", "2")
-        val friendIds = repository.getFriends("1").map { it.friend.id }
+        val friendIds = repository.getFriends("1").map { it.other("1") }
         assertTrue("2" !in friendIds)
         assertTrue("3" in friendIds)
     }
@@ -299,7 +300,7 @@ class Neo4jUserRepositoryIT {
     // --- getFriendsOf (batched primitive) ---
 
     @Test
-    fun `getFriendsOf returns friends of all given users with duplicates`() {
+    fun `getFriendsOf returns friends of all given users keyed by user id`() {
         repository.create(user("A"))
         repository.create(user("B"))
         repository.create(user("C"))
@@ -308,9 +309,11 @@ class Neo4jUserRepositoryIT {
         makeFriends("A", "C")
         makeFriends("B", "D")
         makeFriends("C", "D")
-        // friends of {B, C}: B -> {A, D}, C -> {A, D}
-        val ids = repository.getFriendsOf(listOf("B", "C")).map { it.id }.sorted()
-        assertEquals(listOf("A", "A", "D", "D"), ids)
+        // B -> {A,D}, C -> {A,D}
+        val result = repository.getFriendsOf(listOf("B", "C"))
+        assertEquals(setOf("B", "C"), result.keys)
+        assertEquals(listOf("A", "D"), result.getValue("B").map { it.other("B") }.sorted())
+        assertEquals(listOf("A", "D"), result.getValue("C").map { it.other("C") }.sorted())
     }
 
     @Test

@@ -14,18 +14,20 @@ import java.time.Instant
 
 class Neo4jUserRepository(private val driver: Driver) : UserRepository {
     companion object {
+        // companion object = static-like factory method
         fun connect(uri: String, username: String, password: String): Neo4jUserRepository =
             Neo4jUserRepository(GraphDatabase.driver(uri, AuthTokens.basic(username, password)))
                 .also { it.ensureSchema() }
     }
 
-    /** Enforces unique User.id so a duplicate id cannot create a second node. */
+    // ensures unique user id constraint & c reates lookup table -> Better performance
     fun ensureSchema() {
         driver.session().use { session ->
             session.run("CREATE CONSTRAINT user_id_unique IF NOT EXISTS FOR (u:User) REQUIRE u.id IS UNIQUE")
         }
     }
 
+    // extension function: adds toUser() method to Neo4j's Node type
     private fun Node.toUser(): User = User(
         id = this["id"].asString(),
         name = this["name"].asString(),
@@ -38,6 +40,7 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
     )
 
     override fun create(user: User) {
+        // .use{} closes the session automatically after the block
         driver.session().use { session ->
             session.run(
                 """CREATE (u:User {
@@ -73,6 +76,7 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
 
     override fun delete(id: String) {
         driver.session().use { session ->
+            // DETACH DELETE removes the node and all its relationships
             session.run(
                 "MATCH (user:User {id: \$userId}) DETACH DELETE user",
                 parameters("userId", id)
@@ -92,6 +96,7 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
         }
         if (props.isEmpty()) return
         driver.session().use { session ->
+            // SET user += $props merges only provided fields, leaving others unchanged
             session.run(
                 "MATCH (user:User {id: \$userId}) SET user += \$props",
                 parameters("userId", id, "props", props)
@@ -101,6 +106,8 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
 
     override fun addFriendRequest(fromId: String, toId: String, sendTime: Instant) {
         driver.session().use { session ->
+            // MERGE = create relationship if it doesn't exist
+            // ${'$'} -> escape $
             session.run(
                 """MATCH (sender:User {id: ${'$'}senderId}), (receiver:User {id: ${'$'}receiverId})
                    MERGE (sender)-[r:SENT_REQUEST]->(receiver)
@@ -151,10 +158,8 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
                 """MATCH (sender:User {id: ${'$'}senderId}), (receiver:User {id: ${'$'}receiverId})
                    OPTIONAL MATCH (receiver)-[rev:SENT_REQUEST]->(sender)
                    DELETE rev
-                   MERGE (sender)-[r1:FRIENDS_WITH]->(receiver)
-                   ON CREATE SET r1.createdAtEpochMs = ${'$'}createdAtEpochMs
-                   MERGE (receiver)-[r2:FRIENDS_WITH]->(sender)
-                   ON CREATE SET r2.createdAtEpochMs = ${'$'}createdAtEpochMs""",
+                   MERGE (sender)-[r:FRIENDS_WITH]-(receiver)
+                   ON CREATE SET r.createdAtEpochMs = ${'$'}createdAtEpochMs""",
                 parameters(
                     "senderId", fromId,
                     "receiverId", toId,
@@ -164,14 +169,13 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
         }
     }
 
-    override fun addFriend(userId: String, friendId: String, createTime: Instant) {
+    // test helper: create friendship directly
+    fun addFriend(userId: String, friendId: String, createTime: Instant) {
         driver.session().use { session ->
             session.run(
                 """MATCH (user:User {id: ${'$'}userId}), (friend:User {id: ${'$'}friendId})
-                   MERGE (user)-[r1:FRIENDS_WITH]->(friend)
-                   ON CREATE SET r1.createdAtEpochMs = ${'$'}createdAtEpochMs
-                   MERGE (friend)-[r2:FRIENDS_WITH]->(user)
-                   ON CREATE SET r2.createdAtEpochMs = ${'$'}createdAtEpochMs""",
+                   MERGE (user)-[r:FRIENDS_WITH]-(friend)
+                   ON CREATE SET r.createdAtEpochMs = ${'$'}createdAtEpochMs""",
                 parameters("userId", userId, "friendId", friendId, "createdAtEpochMs", createTime.toEpochMilli())
             )
         }
@@ -179,7 +183,7 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
 
     override fun removeFriend(userId: String, friendId: String) {
         driver.session().use { session ->
-            // Undirected match deletes both directions, even if only one edge exists.
+            // undirected match, deletes both directions
             session.run(
                 """MATCH (user:User {id: ${'$'}userId})-[r:FRIENDS_WITH]-(friend:User {id: ${'$'}friendId})
                    DELETE r""",
@@ -191,7 +195,7 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
     override fun areFriends(userId: String, friendId: String): Boolean {
         return driver.session().use { session ->
             session.run(
-                """MATCH (user:User {id: ${'$'}userId})-[r:FRIENDS_WITH]->(friend:User {id: ${'$'}friendId})
+                """MATCH (user:User {id: ${'$'}userId})-[r:FRIENDS_WITH]-(friend:User {id: ${'$'}friendId})
                    RETURN count(r) > 0 AS areFriends""",
                 parameters("userId", userId, "friendId", friendId)
             ).single()["areFriends"].asBoolean()
@@ -200,26 +204,33 @@ class Neo4jUserRepository(private val driver: Driver) : UserRepository {
 
     override fun getFriends(userId: String): List<Friendship> = driver.session().use { session ->
         session.run(
-            """MATCH (user:User {id: ${'$'}userId})-[r:FRIENDS_WITH]->(friend:User)
-               RETURN friend, r.createdAtEpochMs AS createdAtEpochMs""",
+            """MATCH (user:User {id: ${'$'}userId})-[r:FRIENDS_WITH]-(friend:User)
+               RETURN user.id AS userId, friend.id AS friendId, r.createdAtEpochMs AS createdAtEpochMs""",
             parameters("userId", userId)
         ).list { record ->
             Friendship(
-                record["friend"].asNode().toUser(),
+                record["userId"].asString(),
+                record["friendId"].asString(),
                 Instant.ofEpochMilli(record["createdAtEpochMs"].asLong())
             )
         }
     }
 
-    override fun getFriendsOf(userIds: Collection<String>): List<User> {
-        if (userIds.isEmpty()) return emptyList()
+    override fun getFriendsOf(userIds: Collection<String>): Map<String, List<Friendship>> {
+        if (userIds.isEmpty()) return emptyMap()
         return driver.session().use { session ->
             session.run(
-                """MATCH (user:User)-[:FRIENDS_WITH]->(friend:User)
+                """MATCH (user:User)-[r:FRIENDS_WITH]-(friend:User)
                    WHERE user.id IN ${'$'}userIds
-                   RETURN friend""",
+                   RETURN user.id AS userId, friend.id AS friendId, r.createdAtEpochMs AS createdAtEpochMs""",
                 parameters("userIds", userIds.toList())
-            ).list { record -> record["friend"].asNode().toUser() }
+            ).list { record ->
+                record["userId"].asString() to Friendship(
+                    record["userId"].asString(),
+                    record["friendId"].asString(),
+                    Instant.ofEpochMilli(record["createdAtEpochMs"].asLong())
+                )
+            }.groupBy({ it.first }, { it.second }) // group pairs into Map<userId, List<Friendship>>
         }
     }
 

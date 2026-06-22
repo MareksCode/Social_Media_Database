@@ -5,15 +5,7 @@ import model.UserUpdate
 import repository.Neo4jUserRepository
 import service.UserService
 
-/**
- * Simple interactive terminal app to exercise every UserService feature
- * against a live Neo4j instance.
- *
- * Connection settings (env vars, with defaults):
- *   NEO4J_URI       bolt://localhost:7687
- *   NEO4J_USER      neo4j
- *   NEO4J_PASSWORD  passwort
- */
+// CLI app for UserService; reads NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
 fun main() {
     val uri = System.getenv("NEO4J_URI") ?: "bolt://localhost:7687"
     val user = System.getenv("NEO4J_USER") ?: "neo4j"
@@ -33,7 +25,7 @@ fun main() {
     try {
         Cli(service).run()
     } finally {
-        repository.close()
+        repository.close() // finally runs even on exception — ensures the driver is always closed
     }
     println("Bye.")
 }
@@ -41,7 +33,7 @@ fun main() {
 private class Cli(private val service: UserService) {
 
     fun run() {
-        loop@ while (true) {
+        loop@ while (true) { // loop@ label lets break@loop exit from inside the when{} block
             printMenu()
             when (prompt("> ").trim()) {
                 "1" -> createUser()
@@ -177,7 +169,11 @@ private class Cli(private val service: UserService) {
         if (list.isEmpty()) {
             println("No friends.")
         } else {
-            list.forEach { println("  ${it.friend.name} (${it.friend.id})  since ${it.createTime}") }
+            list.forEach {
+                val friendId = it.other(id)
+                val name = service.getUser(friendId)?.name ?: "?"
+                println("  $name ($friendId)  since ${it.createTime}")
+            }
         }
     }
 
@@ -211,7 +207,7 @@ private class Cli(private val service: UserService) {
             SeedData("Ivan", "ivan@example.com", Status.OFFLINE, "gaming", "Design", "304"),
             SeedData("Judy", "judy@example.com", Status.ONLINE, "reading", "IT", "010")
         )
-        // create all
+        // create users
         val id = mutableMapOf<String, String>()
         println("Created ${seeds.size} test users:")
         seeds.forEach { s ->
@@ -220,7 +216,7 @@ private class Cli(private val service: UserService) {
             println("  ${u.name.padEnd(6)} id=${u.id}")
         }
 
-        // friendship line of 6 + one small circle (triangle Alice-Bob-Carol)
+        // friend line + Alice-Bob-Carol triangle
         val friendships = listOf(
             "Alice" to "Bob",
             "Bob" to "Carol",
@@ -231,10 +227,10 @@ private class Cli(private val service: UserService) {
         )
         friendships.forEach { (a, b) ->
             service.sendFriendRequest(id.getValue(a), id.getValue(b))
-            service.sendFriendRequest(id.getValue(b), id.getValue(a)) // reverse auto-accepts
+            service.sendFriendRequest(id.getValue(b), id.getValue(a)) // auto-accepts
         }
 
-        // 3 pending requests to Dave (a user within the friend line)
+        // 3 pending requests to Dave
         listOf("Grace", "Heidi", "Ivan").forEach { sender ->
             service.sendFriendRequest(id.getValue(sender), id.getValue("Dave"))
         }
@@ -251,7 +247,7 @@ private class Cli(private val service: UserService) {
         val interest: String, val department: String, val room: String
     )
 
-    // ---- helpers ----
+    // helpers
 
     private fun printUser(u: model.User) {
         println("  id:         ${u.id}")

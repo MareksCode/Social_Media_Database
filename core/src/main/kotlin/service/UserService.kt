@@ -40,7 +40,7 @@ class UserService(
         require(!repository.areFriends(fromId, toId)) { "Users are already friends" }
         val now = Instant.now(clock)
         if (repository.friendRequestExists(toId, fromId)) {
-            // reverse request already pending: accept it (atomic remove + befriend)
+            // reverse pending: auto-accept
             repository.acceptFriendRequest(fromId, toId, now)
         } else {
             repository.addFriendRequest(fromId, toId, now)
@@ -56,13 +56,14 @@ class UserService(
     fun getFriends(userId: String): List<Friendship> = repository.getFriends(userId)
 
     fun getFriendRecommendations(userId: String): List<User> {
-        val direct = repository.getFriends(userId)
-        val directIds = direct.mapTo(mutableSetOf()) { it.friend.id }
+        // friend-of-friend (2-hop): rank candidates by how many mutual friends they share
+        val directIds = repository.getFriends(userId).mapTo(mutableSetOf()) { it.other(userId) }
         return repository.getFriendsOf(directIds)
-            .filter { it.id != userId && it.id !in directIds }
-            .groupingBy { it }.eachCount()
-            .entries.sortedByDescending { it.value }
-            .map { it.key }
+            .flatMap { (ownerId, friendships) -> friendships.map { it.other(ownerId) } } // all 2-hop neighbors
+            .filter { it != userId && it !in directIds } // exclude self and already-friends
+            .groupingBy { it }.eachCount() // count appearances = number of mutual friends
+            .entries.sortedByDescending { it.value } // highest mutual-friend count first
+            .mapNotNull { repository.getById(it.key) }
     }
 
     fun removeFriend(userId: String, friendId: String) = repository.removeFriend(userId, friendId)
